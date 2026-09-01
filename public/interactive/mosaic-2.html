@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Интерактивная Мозаика Искр</title>
+    <meta name="description" content="Интерактивная визуализация в цифровом портфолио Eva Interactive." />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background-color: #020205; font-family: sans-serif; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #themeBtn {
+            position: absolute; top: 20px; right: 20px; padding: 10px 18px;
+            background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff; border-radius: 20px; font-size: 13px; letter-spacing: 1px;
+            cursor: pointer; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+            z-index: 10; transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+
+    <button id="themeBtn">РЕЖИМ: НЕОН</button>
+    <canvas id="mosaicCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('mosaicCanvas');
+        const ctx = canvas.getContext('2d');
+        const themeBtn = document.getElementById('themeBtn');
+
+        const THEMES = ['NEON', 'PASTEL', 'MATRIX'];
+        let currentThemeIndex = 0;
+
+        function resize() {
+            canvas.width = window.innerWidth * window.devicePixelRatio;
+            canvas.height = window.innerHeight * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        const COLS = 6; 
+        const ROWS = 8;
+        const blocks = [];
+
+        let tiltX = 0; let tiltY = 0; let lastTapTime = 0;
+
+        const cellWidth = window.innerWidth / COLS;
+        const cellHeight = window.innerHeight / ROWS;
+        const blockSize = Math.min(cellWidth, cellHeight) * 0.7;
+
+        // Создаем простую и надежную сетку элементов
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                blocks.push({
+                    x: c * cellWidth + cellWidth / 2,
+                    y: r * cellHeight + cellHeight / 2,
+                    angle: Math.random() * Math.PI,
+                    rotSpeed: 0.02,
+                    baseHue: Math.floor(Math.random() * 360),
+                    isExploded: false,
+                    particles: [],
+                    cooldown: 0
+                });
+            }
+        }
+
+        function createExplosion(block) {
+            block.isExploded = true;
+            block.cooldown = 120; // Время до восстановления плитки
+            block.particles = [];
+
+            // Генерируем 20 летящих искр-частиц
+            for (let i = 0; i < 20; i++) {
+                const pAngle = Math.random() * Math.PI * 2;
+                const pSpeed = 2 + Math.random() * 6;
+                block.particles.push({
+                    px: 0,
+                    py: 0,
+                    vx: Math.cos(pAngle) * pSpeed,
+                    vy: Math.sin(pAngle) * pSpeed,
+                    size: 2 + Math.random() * 4
+                });
+            }
+        }
+
+        function handleTouch(e) {
+            e.preventDefault();
+            const touches = e.touches;
+            const currentTime = Date.now();
+            const tapLength = currentTime - lastTapTime;
+            const isDoubleTap = tapLength < 300 && tapLength > 0;
+            
+            if (e.type === 'touchstart') lastTapTime = currentTime;
+
+            // Запрашиваем доступ к гироскопу при клике
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission();
+            }
+
+            for (let i = 0; i < touches.length; i++) {
+                const touchX = touches[i].clientX;
+                const touchY = touches[i].clientY;
+
+                blocks.forEach(block => {
+                    const dist = Math.hypot(block.x - touchX, block.y - touchY);
+                    if (dist < blockSize * 1.2) {
+                        if (isDoubleTap && !block.isExploded) {
+                            createExplosion(block);
+                        } else if (!block.isExploded) {
+                            // Обычное касание ускоряет вращение плит
+                            block.rotSpeed += 0.15;
+                        }
+                    }
+                });
+            }
+        }
+
+        canvas.addEventListener('touchstart', handleTouch, { passive: false });
+        canvas.addEventListener('touchmove', handleTouch, { passive: false });
+
+        window.addEventListener('deviceorientation', (e) => {
+            if (e.beta !== null && e.gamma !== null) {
+                tiltX = e.gamma * 0.1; 
+                tiltY = e.beta * 0.1;
+            }
+        });
+
+        themeBtn.addEventListener('click', () => {
+            currentThemeIndex = (currentThemeIndex + 1) % THEMES.length;
+            themeBtn.innerText = `РЕЖИМ: ${THEMES[currentThemeIndex]}`;
+        });
+
+        function animate() {
+            // Эффект шлейфа (Motion Blur)
+            ctx.fillStyle = 'rgba(2, 2, 5, 0.2)'; 
+            ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+            const activeTheme = THEMES[currentThemeIndex];
+
+            blocks.forEach(block => {
+                let mainColor, glowColor, blurSize;
+                const hue = block.baseHue;
+
+                // Настройки тем
+                if (activeTheme === 'NEON') {
+                    mainColor = `hsl(${hue}, 100%, 65%)`;
+                    glowColor = `hsl(${hue}, 100%, 50%)`;
+                    blurSize = 15;
+                } else if (activeTheme === 'PASTEL') {
+                    mainColor = `hsl(${hue}, 50%, 75%)`;
+                    glowColor = 'transparent';
+                    blurSize = 0;
+                } else if (activeTheme === 'MATRIX') {
+                    mainColor = '#00ff00';
+                    glowColor = '#00aa00';
+                    blurSize = 10;
+                }
+
+                if (block.isExploded) {
+                    block.cooldown--;
+
+                    block.particles.forEach(p => {
+                        // Искры летят во все стороны + их сносит гироскопом (наклоном телефона)
+                        p.px += p.vx + tiltX;
+                        p.py += p.vy + tiltY;
+
+                        if (block.cooldown <= 0) {
+                            // Плавный возврат частиц в центр
+                            p.px *= 0.85;
+                            p.py *= 0.85;
+                            if (Math.abs(p.px) < 1 && Math.abs(p.py) < 1) block.isExploded = false;
+                        }
+
+                        // Рисуем искры
+                        ctx.save();
+                        ctx.translate(block.x + p.px, block.y + p.py);
+                        ctx.shadowBlur = blurSize;
+                        ctx.shadowColor = glowColor;
+                        ctx.fillStyle = mainColor;
+                        ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+                        ctx.restore();
+                    });
+                } 
+                else {
+                    // Обычная плитка плавно вращается
+                    block.angle += block.rotSpeed;
+                    block.rotSpeed += (0.02 - block.rotSpeed) * 0.05; // Возврат к базовой скорости
+
+                    ctx.save();
+                    ctx.translate(block.x, block.y);
+                    ctx.rotate(block.angle);
+
+                    // Эффект неона
+                    ctx.shadowBlur = blurSize;
+                    ctx.shadowColor = glowColor;
+                    ctx.fillStyle = mainColor;
+
+                    // Рисуем красивый вращающийся ромб/плитку
+                    ctx.fillRect(-blockSize/2, -blockSize/2, blockSize, blockSize);
+                    
+                    // Обводка
+                    ctx.shadowBlur = 0;
+                    ctx.strokeStyle = '#020205';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(-blockSize/2, -blockSize/2, blockSize, blockSize);
+
+                    ctx.restore();
+                }
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+<script data-goatcounter="https://abyss-labs.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><img src="https://donaldzou.dev" style="display:none;"/><img src="https://donaldzou.dev" style="display:none;"/>    <!-- Статистика GoatCounter -->
+    <script data-goatcounter="https://goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>

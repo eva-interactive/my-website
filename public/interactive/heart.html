@@ -1,0 +1,231 @@
+cat << 'EOF' > heart.html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Сердце Оптимизированное</title>
+    <meta name="description" content="Интерактивная визуализация в цифровом портфолио Eva Interactive." />
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #030306; touch-action: none; font-family: sans-serif; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        
+        #ui {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            display: flex; flex-direction: column; align-items: center; gap: 15px;
+            z-index: 999; width: 85%; max-width: 320px;
+        }
+        
+        #btn {
+            padding: 16px 36px; background: #ff2a6d; color: white; border: none;
+            border-radius: 30px; font-size: 18px; font-weight: bold; cursor: pointer;
+            box-shadow: 0 4px 25px rgba(255, 42, 109, 0.6); width: 100%;
+        }
+        
+        .slider-box {
+            display: flex; align-items: center; gap: 10px; width: 100%;
+            background: rgba(255, 255, 255, 0.08); padding: 10px 15px;
+            border-radius: 20px; backdrop-filter: blur(10px); box-sizing: border-box;
+        }
+        
+        .slider-box span { color: white; font-size: 14px; font-weight: bold; white-space: nowrap; }
+        
+        #sizeSlider {
+            flex-grow: 1; -webkit-appearance: none; appearance: none;
+            height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; outline: none;
+        }
+        
+        #sizeSlider::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 20px; height: 20px;
+            border-radius: 50%; background: #ff2a6d; cursor: pointer;
+            box-shadow: 0 0 10px #ff2a6d;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div class="slider-box">
+            <span>Размер:</span>
+            <input type="range" id="sizeSlider" min="200" max="1500" value="650">
+        </div>
+        <button id="btn">Превратить в Сердце</button>
+    </div>
+    
+    <canvas id="canvas3d"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas3d');
+        const ctx = canvas.getContext('2d');
+        
+        const dpr = window.devicePixelRatio || 1;
+        let w = canvas.width = window.innerWidth * dpr;
+        let h = canvas.height = window.innerHeight * dpr;
+        canvas.style.width = window.innerWidth + 'px';
+        canvas.style.height = window.innerHeight + 'px';
+        
+        let cx = w / 2, cy = h / 2;
+        let fov = 650; 
+        
+        const slider = document.getElementById('sizeSlider');
+        slider.addEventListener('input', (e) => {
+            fov = parseInt(e.target.value);
+        });
+
+        const count = 1000; // Снижено для повышения четкости и контраста
+        const particles = [];
+        let isHeartForm = false;
+
+        function getHeartPoint() {
+            while (true) {
+                const x = (Math.random() - 0.5) * 3;
+                const y = (Math.random() - 0.5) * 3;
+                const z = (Math.random() - 0.5) * 3;
+                const f = Math.pow(x*x + (9/4)*y*y + z*z - 1, 3) - x*x*z*z*z - (9/80)*y*y*z*z*z;
+                if (f <= 0) {
+                    return { x: x * 85, y: -z * 85, z: y * 85 };
+                }
+            }
+        }
+
+        for (let i = 0; i < count; i++) {
+            const hue = Math.floor(Math.random() * 360);
+            const cubePos = {
+                x: (Math.random() - 0.5) * 220,
+                y: (Math.random() - 0.5) * 220,
+                z: (Math.random() - 0.5) * 220
+            };
+            const heartPos = getHeartPoint();
+
+            particles.push({
+                x: cubePos.x, y: cubePos.y, z: cubePos.z,
+                cubeX: cubePos.x, cubeY: cubePos.y, cubeZ: cubePos.z,
+                heartX: heartPos.x, heartY: heartPos.y, heartZ: heartPos.z,
+                baseSize: (5 + Math.random() * 5) * dpr, // ИСПРАВЛЕНО: Базовый размер уменьшен, чтобы избежать каши
+                hue: hue
+            });
+        }
+
+        let angleX = 0.4;
+        let angleY = 0.4;
+        let isDragging = false;
+        let lastPointerX = 0;
+        let lastPointerY = 0;
+
+        // ИСПРАВЛЕНО: Переход на универсальные Pointer Events вместо капризных тач-событий
+        window.addEventListener('pointerdown', (e) => {
+            if (e.target.id === 'btn' || e.target.id === 'sizeSlider') return;
+            isDragging = true;
+            lastPointerX = e.clientX;
+            lastPointerY = e.clientY;
+        });
+
+        window.addEventListener('pointermove', (e) => {
+            if (!isDragging) return;
+
+            let deltaX = e.clientX - lastPointerX;
+            let deltaY = e.clientY - lastPointerY;
+
+            // Мягкое вращение без сбоев
+            if (Math.abs(deltaX) < 150 && Math.abs(deltaY) < 150) {
+                angleY += deltaX * 0.005;
+                angleX += deltaY * 0.005;
+            }
+
+            lastPointerX = e.clientX;
+            lastPointerY = e.clientY;
+        });
+
+        window.addEventListener('pointerup', () => { isDragging = false; });
+        window.addEventListener('pointercancel', () => { isDragging = false; });
+
+        document.getElementById('btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            isHeartForm = !isHeartForm;
+            document.getElementById('btn').innerText = isHeartForm ? "Превратить в Квадрат" : "Превратить в Сердце";
+        });
+
+        function draw() {
+            ctx.fillStyle = '#030306';
+            ctx.fillRect(0, 0, w, h);
+
+            angleY = angleY % (Math.PI * 2);
+            angleX = angleX % (Math.PI * 2);
+
+            if (!isDragging) {
+                angleY += 0.004;
+                angleX += 0.002;
+            }
+
+            const cosX = Math.cos(angleX), sinX = Math.sin(angleX);
+            const cosY = Math.cos(angleY), sinY = Math.sin(angleY);
+            const renderList = [];
+
+            for (let i = 0; i < count; i++) {
+                const p = particles[i];
+
+                const targetX = isHeartForm ? p.heartX : p.cubeX;
+                const targetY = isHeartForm ? p.heartY : p.cubeY;
+                const targetZ = isHeartForm ? p.heartZ : p.cubeZ;
+
+                p.x += (targetX - p.x) * 0.06;
+                p.y += (targetY - p.y) * 0.06;
+                p.z += (targetZ - p.z) * 0.06;
+
+                let x1 = p.x * cosY + p.z * sinY;
+                let z1 = -p.x * sinY + p.z * cosY;
+                let y2 = p.y * cosX - z1 * sinX;
+                let z2 = p.y * sinX + z1 * cosX;
+
+                renderList.push({ p: p, x: x1, y: y2, z: z2 + 900 });
+            }
+
+            renderList.sort((a, b) => b.z - a.z);
+
+            for (let i = 0; i < renderList.length; i++) {
+                const item = renderList[i];
+                const p = item.p;
+
+                const scale = fov / item.z;
+                const screenX = cx + item.x * scale;
+                const screenY = cy + item.y * scale;
+                
+                // ИСПРАВЛЕНО: Масштаб размера шара зафиксирован, чтобы при зуме не пропадал контраст
+                const size = p.baseSize * (650 / item.z); 
+
+                if (screenX > -size && screenX < w + size && screenY > -size && screenY < h + size) {
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, size, 0, Math.PI * 2);
+
+                    const gradient = ctx.createRadialGradient(
+                        screenX - size * 0.3, screenY - size * 0.3, size * 0.05,
+                        screenX, screenY, size
+                    );
+                    gradient.addColorStop(0, `hsl(${p.hue}, 100%, 90%)`);
+                    gradient.addColorStop(0.3, `hsl(${p.hue}, 100%, 60%)`);
+                    gradient.addColorStop(1, 'transparent');
+
+                    ctx.fillStyle = gradient;
+                    ctx.fill();
+                }
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        draw();
+
+        window.addEventListener('resize', () => {
+            w = canvas.width = window.innerWidth * dpr;
+            h = canvas.height = window.innerHeight * dpr;
+            canvas.style.width = window.innerWidth + 'px';
+            canvas.style.height = window.innerHeight + 'px';
+            cx = w / 2;
+            cy = h / 2;
+        });
+    </script>
+<script data-goatcounter="https://abyss-labs.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><img src="https://donaldzou.dev" style="display:none;"/><img src="https://donaldzou.dev" style="display:none;"/>    <!-- Статистика GoatCounter -->
+    <script data-goatcounter="https://goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>
+EOF

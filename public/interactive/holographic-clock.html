@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Голографические Квантовые Часы</title>
+    <meta name="description" content="Интерактивная визуализация в цифровом портфолио Eva Interactive." />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100%;
+            height: 100%;
+            background: #010105;
+            overflow: hidden;
+            font-family: monospace;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        #bgCanvas {
+            z-index: 1;
+        }
+        #clockCanvas {
+            z-index: 2;
+        }
+        .digital-time {
+            position: relative;
+            color: #00f3ff;
+            font-size: 2.8rem;
+            font-weight: bold;
+            text-shadow: 0 0 10px #00f3ff, 0 0 30px #00a2ff;
+            letter-spacing: 2px;
+            z-index: 10;
+            pointer-events: none;
+            background: rgba(1, 1, 5, 0.9);
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 243, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="digital-time" id="digital">00:00:00</div>
+    <canvas id="bgCanvas"></canvas>
+    <canvas id="clockCanvas"></canvas>
+
+    <script>
+        const clockCanvas = document.getElementById('clockCanvas');
+        const ctx = clockCanvas.getContext('2d');
+        const bgCanvas = document.getElementById('bgCanvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        const digital = document.getElementById('digital');
+
+        function resize() {
+            const w = document.documentElement.clientWidth;
+            const h = document.documentElement.clientHeight;
+            clockCanvas.width = w;
+            clockCanvas.height = h;
+            bgCanvas.width = w;
+            bgCanvas.height = h;
+            initMatrix();
+        }
+        window.addEventListener('resize', resize);
+
+        // --- КВАНТОВАЯ РАДУЖНАЯ МАТРИЦА ---
+        const chars = "010101XYZΔΛΞΩΨΦ";
+        const fontSize = 16;
+        
+        // Палитра сочных неоновых коммерческих цветов
+        const colors = [
+            'rgba(0, 243, 255, 0.45)',  /* Кибер-бирюзовый */
+            'rgba(189, 0, 255, 0.45)',  /* Пурпурный */
+            'rgba(0, 81, 255, 0.45)',   /* Глубокий синий */
+            'rgba(0, 162, 255, 0.45)',  /* Светло-синий */
+            'rgba(113, 0, 255, 0.45)'   /* Фиолетовый */
+        ];
+        
+        let columns;
+        let drops;
+        let dropColors; // Массив для хранения цвета каждой отдельной струи
+
+        function initMatrix() {
+            columns = Math.floor(bgCanvas.width / fontSize);
+            drops = [];
+            dropColors = [];
+            
+            for (let x = 0; x < columns; x++) {
+                drops[x] = Math.random() * -50; 
+                // Назначаем каждой колонке свой случайный цвет из палитры
+                dropColors[x] = colors[Math.floor(Math.random() * colors.length)];
+            }
+        }
+
+        function drawBackground() {
+            bgCtx.fillStyle = 'rgba(1, 1, 5, 0.06)';
+            bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+
+            bgCtx.font = 'bold ' + fontSize + 'px monospace';
+
+            for (let i = 0; i < drops.length; i++) {
+                const text = chars[Math.floor(Math.random() * chars.length)];
+                
+                // Эффект яркой белой искры в голове падающей капли
+                if(Math.random() > 0.98) {
+                    bgCtx.fillStyle = '#ffffff';
+                } else {
+                    bgCtx.fillStyle = dropColors[i]; // Берем индивидуальный цвет нити
+                }
+
+                bgCtx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+                if (drops[i] * fontSize > bgCanvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                    // При перезапуске капли сверху можно обновить ей цвет
+                    dropColors[i] = colors[Math.floor(Math.random() * colors.length)];
+                }
+                drops[i] += 0.7;
+            }
+        }
+
+        // --- АНАЛОГОВЫЕ ЧАСЫ ---
+        function drawClock() {
+            ctx.clearRect(0, 0, clockCanvas.width, clockCanvas.height);
+            
+            const now = new Date();
+            const hrs = now.getHours();
+            const mins = now.getMinutes();
+            const secs = now.getSeconds();
+            const ms = now.getMilliseconds();
+
+            digital.innerText = 
+                String(hrs).padStart(2, '0') + ':' + 
+                String(mins).padStart(2, '0') + ':' + 
+                String(secs).padStart(2, '0');
+
+            const cx = clockCanvas.width / 2;
+            const cy = clockCanvas.height / 2;
+            const radius = Math.min(cx, cy) * 0.6;
+
+            const radSec = ((secs + ms / 1000) * 6 * Math.PI) / 180;
+            const radMin = ((mins + secs / 60) * 6 * Math.PI) / 180;
+            const radHr = (((hrs % 12) + mins / 60) * 30 * Math.PI) / 180;
+
+            function drawRing(r, angle, color, blurColor, thickness) {
+                ctx.save();
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = blurColor;
+                ctx.strokeStyle = color;
+                ctx.lineWidth = thickness;
+                
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.lineCap = 'round';
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(cx + Math.sin(angle) * (r * 0.95), cy - Math.cos(angle) * (r * 0.95));
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            drawRing(radius, radSec, '#00f3ff', '#00a2ff', 2);
+            drawRing(radius * 0.8, radMin, '#bd00ff', '#7100ff', 4);
+            drawRing(radius * 0.6, radHr, '#0051ff', '#0011ff', 6);
+
+            // Сетка-радар
+            ctx.strokeStyle = 'rgba(0, 243, 255, 0.05)';
+            for(let i = 1; i <= 5; i++) {
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius * (i * 0.2), 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+        }
+
+        function tick() {
+            drawBackground();
+            drawClock();
+            requestAnimationFrame(tick);
+        }
+
+        resize();
+        tick();
+    </script>
+<script data-goatcounter="https://abyss-labs.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><img src="https://donaldzou.dev" style="display:none;"/><img src="https://donaldzou.dev" style="display:none;"/>    <!-- Статистика GoatCounter -->
+    <script data-goatcounter="https://goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>

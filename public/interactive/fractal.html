@@ -1,0 +1,118 @@
+cat << 'EOF' > fractal.html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Математический Фрактал: Дерево Пифагора</title>
+    <meta name="description" content="Интерактивная визуализация в цифровом портфолио Eva Interactive." />
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #020204; touch-action: none; font-family: sans-serif; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #hud {
+            position: absolute; top: 4%; left: 50%; transform: translateX(-50%);
+            color: rgba(0, 240, 255, 0.4); font-size: 13px; text-align: center;
+            pointer-events: none; width: 90%; letter-spacing: 1px; line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="hud">КВАНТОВЫЙ ФРАКТАЛ ПИФАГОРА<br><span style="color:#ffffff;">Водите пальцем, чтобы менять геометрию и изгиб ветвей</span></div>
+    <canvas id="fractalCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('fractalCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const dpr = window.devicePixelRatio || 1;
+        let w = canvas.width = window.innerWidth * dpr;
+        let h = canvas.height = window.innerHeight * dpr;
+        canvas.style.width = window.innerWidth + 'px';
+        canvas.style.height = window.innerHeight + 'px';
+
+        // Параметры фрактала
+        let maxDepth = 10; // Глубина прорисовки (ветвления)
+        let angleBias = 0; // Наклон от пальца по горизонтали
+        let branchLengthRatio = 0.75; // Длина дочерних ветвей
+
+        // Координаты пальца для плавного интерактивного ветра
+        let targetAngle = Math.PI / 4; 
+        let currentAngle = Math.PI / 4;
+        let targetBias = 0;
+
+        window.addEventListener('pointermove', (e) => {
+            // Движение по горизонтали меняет наклон (ветер)
+            targetBias = (e.clientX * dpr - w / 2) * 0.0015;
+            // Движение по вертикали меняет угол раскрытия веток фрактала
+            targetAngle = (e.clientY * dpr / h) * (Math.PI / 2);
+        });
+
+        // Плавное возвращение к базовой форме, если убрать палец
+        window.addEventListener('pointerup', () => {
+            targetAngle = Math.PI / 4.5;
+            targetBias = 0;
+        });
+
+        // Рекурсивная функция прорисовки фрактального дерева
+        function drawTree(x1, y1, length, angle, depth, hue) {
+            if (depth === 0) return;
+
+            // Вычисляем координаты конца текущей ветки
+            const x2 = x1 + Math.cos(angle) * length;
+            const y2 = y1 + Math.sin(angle) * length;
+
+            // Интерактивный неоновый цвет: плавно меняется от корня к кончикам ветвей
+            ctx.strokeStyle = `hsl(${(hue + depth * 12) % 360}, 100%, 60%)`;
+            // Толщина веток уменьшается с глубиной фрактала
+            ctx.lineWidth = Math.max(1, depth * 0.6 * dpr);
+
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+
+            // Длина веток следующего уровня
+            const nextLength = length * branchLengthRatio;
+
+            // Левое ответвление (математическая рекурсия)
+            drawTree(x2, y2, nextLength, angle - currentAngle + angleBias, depth - 1, hue);
+            // Правое ответвление
+            drawTree(x2, y2, nextLength, angle + currentAngle + angleBias, depth - 1, hue);
+        }
+
+        let baseHue = 180; // Начальный цвет (бирюзовый неон)
+
+        function loop() {
+            // Эффект затухания для шлейфа (создает ощущение, что фрактал дышит и светится)
+            ctx.fillStyle = 'rgba(2, 2, 4, 0.25)';
+            ctx.fillRect(0, 0, w, h);
+
+            // Плавная инерция движения для кинематографичного эффекта
+            currentAngle += (targetAngle - currentAngle) * 0.05;
+            angleBias += (targetBias - angleBias) * 0.05;
+
+            // Медленно переливаем базовый цвет
+            baseHue = (baseHue + 0.2) % 360;
+
+            // Запуск прорисовки дерева от нижней центральной точки экрана строго вверх (-Math.PI/2)
+            const startLength = h * 0.22; // Базовая высота ствола
+            drawTree(w / 2, h, startLength, -Math.PI / 2, maxDepth, baseHue);
+
+            requestAnimationFrame(loop);
+        }
+
+        loop();
+
+        window.addEventListener('resize', () => {
+            w = canvas.width = window.innerWidth * dpr;
+            h = canvas.height = window.innerHeight * dpr;
+            canvas.style.width = window.innerWidth + 'px';
+            canvas.style.height = window.innerHeight + 'px';
+        });
+    </script>
+<script data-goatcounter="https://abyss-labs.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><img src="https://donaldzou.dev" style="display:none;"/><img src="https://donaldzou.dev" style="display:none;"/>    <!-- Статистика GoatCounter -->
+    <script data-goatcounter="https://goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>
+EOF

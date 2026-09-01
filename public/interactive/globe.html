@@ -1,0 +1,182 @@
+cat << 'EOF' > globe.html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Неоновый Глобус с Зумом</title>
+    <meta name="description" content="Интерактивная визуализация в цифровом портфолио Eva Interactive." />
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #030306; touch-action: none; font-family: sans-serif; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #info { position: absolute; top: 4%; left: 50%; transform: translateX(-50%); color: rgba(0, 240, 255, 0.4); font-size: 13px; pointer-events: none; text-align: center; width: 90%; letter-spacing: 1px; }
+    </style>
+</head>
+<body>
+    <div id="info">Один палец — вращение планеты. Два пальца — изменение размера!</div>
+    <canvas id="globeCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('globeCanvas');
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        let w = canvas.width = window.innerWidth * dpr;
+        let h = canvas.height = window.innerHeight * dpr;
+        canvas.style.width = window.innerWidth + 'px';
+        canvas.style.height = window.innerHeight + 'px';
+
+        let cx = w / 2, cy = h / 2;
+        
+        // Интерактивный масштаб (fov), теперь изменяется пальцами
+        let fov = 600;
+
+        const pointCount = 1200;
+        const points = [];
+        const radius = 180 * dpr;
+
+        for (let i = 0; i < pointCount; i++) {
+            const phi = Math.acos(-1 + (2 * i) / pointCount);
+            const theta = Math.sqrt(pointCount * Math.PI) * phi;
+            const x = radius * Math.sin(phi) * Math.cos(theta);
+            const y = radius * Math.sin(phi) * Math.sin(theta);
+            const z = radius * Math.cos(phi);
+            const hue = Math.random() < 0.6 ? 190 + Math.random() * 30 : 130 + Math.random() * 30;
+            points.push({ x: x, y: y, z: z, hue: hue });
+        }
+
+        let angleX = 0.3;
+        let angleY = 0.3;
+        
+        // Списки активных касаний для отслеживания мультитача
+        const activePointers = [];
+        let startFov = 600;
+        let startDist = 0;
+
+        // Расчет расстояния между двумя точками касания
+        function getDistance(p1, p2) {
+            return Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
+        }
+
+        window.addEventListener('pointerdown', (e) => {
+            activePointers.push(e);
+            
+            if (activePointers.length === 2) {
+                // Если коснулись вторым пальцем — фиксируем начальное расстояние и текущий размер
+                startDist = getDistance(activePointers[0], activePointers[1]);
+                startFov = fov;
+            }
+        });
+
+        window.addEventListener('pointermove', (e) => {
+            // Обновляем координаты текущего пальца в массиве
+            const index = activePointers.findIndex(p => p.pointerId === e.pointerId);
+            if (index === -1) return;
+            activePointers[index] = e;
+
+            if (activePointers.length === 1) {
+                // ВРАЩЕНИЕ ОДНИМ ПАЛЬЦЕМ
+                let deltaX = e.clientX - lastX;
+                let deltaY = e.clientY - lastY;
+
+                if (Math.abs(deltaX) < 150 && Math.abs(deltaY) < 150) {
+                    angleY += deltaX * 0.005;
+                    angleX += deltaY * 0.005;
+                }
+            } else if (activePointers.length === 2) {
+                // МАСШТАБИРОВАНИЕ ДВУМЯ ПАЛЬЦАМИ
+                const currentDist = getDistance(activePointers[0], activePointers[1]);
+                if (startDist > 0) {
+                    const ratio = currentDist / startDist;
+                    // Меняем fov в безопасных пределах (от 200 до 1600), чтобы глобус не улетел за экран
+                    fov = Math.max(200, Math.min(1600, startFov * ratio));
+                }
+            }
+
+            // Переменные для отслеживания разницы в следующем кадре (для одного пальца)
+            lastX = e.clientX;
+            lastY = e.clientY;
+        });
+
+        // Вспомогательные переменные для хранения предыдущего шага мыши/тача
+        let lastX = 0, lastY = 0;
+
+        // Удаление пальца из списка активных при поднятии
+        function removePointer(e) {
+            const index = activePointers.findIndex(p => p.pointerId === e.pointerId);
+            if (index !== -1) activePointers.splice(index, 1);
+            if (activePointers.length < 2) startDist = 0;
+        }
+
+        window.addEventListener('pointerup', removePointer);
+        window.addEventListener('pointercancel', removePointer);
+
+        function drawGlobe() {
+            ctx.fillStyle = '#030306';
+            ctx.fillRect(0, 0, w, h);
+
+            angleY = angleY % (Math.PI * 2);
+            angleX = angleX % (Math.PI * 2);
+
+            if (activePointers.length === 0) {
+                angleY += 0.002;
+            }
+
+            const cosX = Math.cos(angleX), sinX = Math.sin(angleX);
+            const cosY = Math.cos(angleY), sinY = Math.sin(angleY);
+            const renderList = [];
+
+            for (let i = 0; i < pointCount; i++) {
+                const p = points[i];
+                let x1 = p.x * cosY + p.z * sinY;
+                let z1 = -p.x * sinY + p.z * cosY;
+                let y2 = p.y * cosX - z1 * sinX;
+                let z2 = p.y * sinX + z1 * cosX;
+                renderList.push({ p: p, x: x1, y: y2, z: z2 + 900 });
+            }
+
+            renderList.sort((a, b) => b.z - a.z);
+
+            for (let i = 0; i < renderList.length; i++) {
+                const item = renderList[i];
+                const p = item.p;
+                const scale = fov / item.z;
+                const screenX = cx + item.x * scale;
+                const screenY = cy + item.y * scale;
+                
+                // Фиксируем базовый размер точек, чтобы они оставались четкими и контрастными при зуме
+                const size = (4.5 * scale * (650 / item.z));
+
+                if (screenX > -size && screenX < w + size && screenY > -size && screenY < h + size) {
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, size, 0, Math.PI * 2);
+
+                    const isFront = item.z < 900;
+                    const brightness = isFront ? '65%' : '35%';
+                    ctx.fillStyle = `hsl(${p.hue}, 100%, ${brightness})`;
+                    
+                    if (isFront) {
+                        ctx.shadowBlur = 8 * dpr;
+                        ctx.shadowColor = `hsl(${p.hue}, 100%, 65%)`;
+                    } else {
+                        ctx.shadowBlur = 0;
+                    }
+
+                    ctx.fill();
+                }
+            }
+            ctx.shadowBlur = 0;
+            requestAnimationFrame(drawGlobe);
+        }
+
+        drawGlobe();
+
+        window.addEventListener('resize', () => {
+            w = canvas.width = window.innerWidth * dpr; h = canvas.height = window.innerHeight * dpr;
+            canvas.style.width = window.innerWidth + 'px'; canvas.style.height = window.innerHeight + 'px';
+            cx = w / 2; cy = h / 2;
+        });
+    </script>
+<script data-goatcounter="https://abyss-labs.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><img src="https://donaldzou.dev" style="display:none;"/><img src="https://donaldzou.dev" style="display:none;"/>    <!-- Статистика GoatCounter -->
+    <script data-goatcounter="https://goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>
+EOF

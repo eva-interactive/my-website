@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Волшебный Лес с Луной</title>
+    <meta name="description" content="Интерактивная визуализация в цифровом портфолио Eva Interactive." />
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #02050c;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="forestCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('forestCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let w = canvas.width = window.innerWidth;
+        let h = canvas.height = window.innerHeight;
+
+        window.addEventListener('resize', () => {
+            w = canvas.width = window.innerWidth;
+            h = canvas.height = window.innerHeight;
+        });
+
+        // Настройки 3D
+        const count = 120;
+        const flies = [];
+        const FOV = 300; 
+        let speedY = 0.0015; 
+        let angle = 0;
+
+        // Переменные для анимации восхода луны
+        let moonY = h + 100; // Начальная позиция луны (под экраном)
+        const targetMoonY = h * 0.35; // Конечная точка восхода луны
+
+        for(let i = 0; i < count; i++) {
+            flies.push({
+                x: (Math.random() - 0.5) * 800,
+                y: (Math.random() - 0.5) * 500 - 40,
+                z: Math.random() * 800,
+                r: Math.random() * 2 + 1.2,
+                phase: Math.random() * 10,
+                speedPhase: Math.random() * 0.03 + 0.01,
+                type: Math.floor(Math.random() * 3) 
+            });
+        }
+
+        const trees = [
+            { x: 0.15, w: 45, color1: '#040b17', color2: '#102540', glow: 'rgba(15, 35, 55, 0.35)' },
+            { x: 0.50, w: 35, color1: '#030812', color2: '#0d2238', glow: 'rgba(20, 45, 25, 0.35)' },
+            { x: 0.85, w: 55, color1: '#050d1c', color2: '#152c4a', glow: 'rgba(45, 30, 15, 0.35)' }
+        ];
+
+        function drawTree(tree, drift) {
+            let cx = (tree.x * w + drift) % (w + 200) - 100;
+            if (cx < -100) cx += (w + 200);
+
+            // Крона (листва)
+            ctx.fillStyle = tree.glow;
+            ctx.beginPath(); ctx.arc(cx, h * 0.32, 90, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cx - 55, h * 0.26, 70, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cx + 55, h * 0.26, 70, 0, Math.PI * 2); ctx.fill();
+
+            // Ствол
+            let grad = ctx.createLinearGradient(cx - tree.w/2, 0, cx + tree.w/2, 0);
+            grad.addColorStop(0, tree.color1);
+            grad.addColorStop(0.5, tree.color2);
+            grad.addColorStop(1, tree.color1);
+            ctx.fillStyle = grad;
+            ctx.fillRect(cx - tree.w/2, 0, tree.w, h);
+
+            // Ветки
+            ctx.strokeStyle = tree.color1;
+            ctx.lineWidth = tree.w * 0.25;
+            ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(cx, h * 0.5); ctx.lineTo(cx - 70, h * 0.4); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(cx, h * 0.36); ctx.lineTo(cx + 60, h * 0.26); ctx.stroke();
+        }
+
+        // Отрисовка огромной луны
+        function drawMoon() {
+            // Плавный подъем луны вверх при запуске
+            if (moonY > targetMoonY) {
+                moonY -= 0.5; // Скорость восхода луны
+            }
+
+            let moonX = w * 0.5; // Луна по центру экрана
+            let moonRadius = Math.min(w, h) * 0.22; // Пропорциональный размер огромной луны
+
+            // 1. Огромное неоновое гало (свечение вокруг луны)
+            ctx.beginPath();
+            let glowGrad = ctx.createRadialGradient(moonX, moonY, moonRadius * 0.5, moonX, moonY, moonRadius * 2.5);
+            glowGrad.addColorStop(0, 'rgba(180, 210, 255, 0.25)');
+            glowGrad.addColorStop(0.4, 'rgba(100, 150, 255, 0.08)');
+            glowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = glowGrad;
+            ctx.arc(moonX, moonY, moonRadius * 2.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 2. Тело луны с мягким внутренним градиентом
+            ctx.beginPath();
+            let moonGrad = ctx.createLinearGradient(moonX - moonRadius, moonY - moonRadius, moonX + moonRadius, moonY + moonRadius);
+            moonGrad.addColorStop(0, '#ffffff');
+            moonGrad.addColorStop(0.5, '#e0ebff');
+            moonGrad.addColorStop(1, '#b0caff');
+            ctx.fillStyle = moonGrad;
+            ctx.arc(moonX, moonY, moonRadius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawFog(drift) {
+            let fogX = (drift * 0.5) % w;
+            let grad1 = ctx.createRadialGradient(fogX, h * 0.5, 10, fogX, h * 0.5, w * 0.5);
+            grad1.addColorStop(0, 'rgba(30, 65, 110, 0.3)'); 
+            grad1.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = grad1;
+            ctx.fillRect(0, 0, w, h);
+        }
+
+        function loop() {
+            let bg = ctx.createLinearGradient(0, 0, 0, h);
+            bg.addColorStop(0, '#02040a');
+            bg.addColorStop(0.6, '#05142b');
+            bg.addColorStop(1, '#122c54'); // Небо стало немного ярче из-за лунного света
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, w, h);
+
+            angle += speedY;
+            let drift = angle * 150;
+
+            // 1. Рисуем луну на самом дальнем плане неба
+            drawMoon();
+
+            // 2. Поверх луны накладываем плывущий туман
+            drawFog(drift);
+
+            flies.sort((a, b) => b.z - a.z);
+
+            let treesDrawn = false;
+            let mx = w / 2;
+            let my = h / 2;
+
+            for(let i = 0; i < count; i++) {
+                let f = flies[i];
+
+                let cos = Math.cos(speedY);
+                let sin = Math.sin(speedY);
+                let x1 = f.x * cos - f.z * sin;
+                let z1 = f.z * cos + f.x * sin;
+                f.x = x1;
+                f.z = z1;
+
+                f.phase += f.speedPhase;
+                f.y += Math.sin(f.phase) * 0.2;
+
+                if (f.z <= -FOV) f.z += 800;
+                if (f.z > 800 - FOV) f.z -= 800;
+
+                let scale = FOV / (FOV + f.z);
+                let sx = mx + f.x * scale;
+                let sy = my + f.y * scale;
+                let sz = f.r * scale;
+
+                if (f.z < 150 && !treesDrawn) {
+                    trees.forEach(t => drawTree(t, drift));
+                    treesDrawn = true;
+                }
+
+                if (sx > 0 && sx < w && sy > 0 && sy < h) {
+                    let alpha = (Math.sin(f.phase) + 1) / 2 * 0.6 + 0.4;
+
+                    ctx.beginPath();
+                    let g = ctx.createRadialGradient(sx, sy, 0, sx, sy, sz * 6);
+                    
+                    if (f.type === 0) {
+                        g.addColorStop(0, 'rgba(255, 200, 80, ' + alpha + ')'); 
+                        g.addColorStop(1, 'rgba(255, 200, 80, 0)');
+                        ctx.fillStyle = g;
+                        ctx.arc(sx, sy, sz * 6, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.fillStyle = 'rgba(255, 255, 220, ' + alpha + ')'; 
+                    } else if (f.type === 1) {
+                        g.addColorStop(0, 'rgba(80, 245, 100, ' + alpha + ')'); 
+                        g.addColorStop(1, 'rgba(80, 245, 100, 0)');
+                        ctx.fillStyle = g;
+                        ctx.arc(sx, sy, sz * 6, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.fillStyle = 'rgba(230, 255, 230, ' + alpha + ')'; 
+                    } else {
+                        g.addColorStop(0, 'rgba(0, 180, 255, ' + alpha + ')'); 
+                        g.addColorStop(1, 'rgba(0, 180, 255, 0)');
+                        ctx.fillStyle = g;
+                        ctx.arc(sx, sy, sz * 6, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.fillStyle = 'rgba(220, 245, 255, ' + alpha + ')'; 
+                    }
+
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, sz, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            if (!treesDrawn) {
+                trees.forEach(t => drawTree(t, drift));
+            }
+
+            requestAnimationFrame(loop);
+        }
+
+        loop();
+    </script>
+<script data-goatcounter="https://abyss-labs.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><img src="https://donaldzou.dev" style="display:none;"/><img src="https://donaldzou.dev" style="display:none;"/>    <!-- Статистика GoatCounter -->
+    <script data-goatcounter="https://goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>

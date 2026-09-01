@@ -1,0 +1,229 @@
+cat << 'EOF' > Огонь.html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Костер в Лесу</title>
+    <meta name="description" content="Интерактивная визуализация в цифровом портфолио Eva Interactive." />
+    <style>
+        body { margin: 0; background: #1a1c4b; overflow: hidden; touch-action: none; user-select: none; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+    </style>
+</head>
+<body>
+    <canvas id="fire"></canvas>
+
+    <script>
+        var canvas = document.getElementById('fire');
+        var ctx = canvas.getContext('2d');
+
+        var width = window.innerWidth;
+        var height = window.innerHeight;
+
+        canvas.width = width;
+        canvas.height = height;
+
+        var fireX = width / 2;
+        var fireY = height * 0.82;
+        var targetX = width / 2;
+        var targetY = height * 0.82;
+
+        // Массивы для частиц огня
+        var pX = [], pY = [], pVX = [], pVY = [], pLife = [], pDecay = [], pRadius = [];
+        // Массивы для искр
+        var sX = [], sY = [], sVX = [], sVY = [], sLife = [], sDecay = [], sSize = [];
+        // Массивы для деревьев
+        var treeX = [], treeWidth = [], treeDepth = [], treeBranchY = [];
+
+        function init() {
+            // Создаем 14 деревьев для густой чащи
+            for (var i = 0; i < 14; i++) {
+                treeX[i] = Math.random() * width;
+                treeWidth[i] = Math.random() * 25 + 15;
+                treeDepth[i] = Math.random() * 0.5 + 0.3;
+                treeBranchY[i] = Math.random() * (height * 0.3) + height * 0.2;
+            }
+
+            // Инициализация огня
+            for (var i = 0; i < 90; i++) {
+                pX[i] = fireX + (Math.random() - 0.5) * 35;
+                pY[i] = fireY - Math.random() * 100;
+                pVX[i] = (Math.random() - 0.5) * 1.5;
+                pVY[i] = -Math.random() * 3 - 2;
+                pLife[i] = Math.random();
+                pDecay[i] = Math.random() * 0.02 + 0.01;
+                pRadius[i] = Math.random() * 22 + 12;
+            }
+
+            // Инициализация искр
+            for (var i = 0; i < 40; i++) {
+                sX[i] = fireX + (Math.random() - 0.5) * 40;
+                sY[i] = fireY - Math.random() * 150;
+                sVX[i] = (Math.random() - 0.5) * 3;
+                sVY[i] = -Math.random() * 2.5 - 1.5;
+                sLife[i] = Math.random();
+                sDecay[i] = Math.random() * 0.02 + 0.008;
+                sSize[i] = Math.random() * 2.5 + 1.0;
+            }
+        }
+
+        function drawBush(centerX, centerY, radius, count) {
+            ctx.beginPath();
+            for (var i = 0; i < count; i++) {
+                var angle = (i / count) * Math.PI * 2;
+                var x = centerX + Math.cos(angle) * (radius * 0.5);
+                var y = centerY + Math.sin(angle) * (radius * 0.4);
+                ctx.arc(x, y, radius * 0.5, 0, Math.PI * 2);
+            }
+            ctx.fill();
+        }
+
+        function drawScenery(glow) {
+            // 1. Градиент заката
+            var skyGradient = ctx.createLinearGradient(0, 0, 0, height);
+            skyGradient.addColorStop(0, '#1a1c4b');  
+            skyGradient.addColorStop(0.4, '#962666'); 
+            skyGradient.addColorStop(0.8, '#f15f3e');
+            skyGradient.addColorStop(1, '#ffc045');   
+            ctx.fillStyle = skyGradient;
+            ctx.fillRect(0, 0, width, height);
+
+            // 2. Зарево костра
+            var bgGlow = ctx.createRadialGradient(fireX, fireY, 20, fireX, fireY, width * 0.45);
+            bgGlow.addColorStop(0, 'rgba(255, 255, 200, ' + (glow * 0.35) + ')');
+            bgGlow.addColorStop(0.5, 'rgba(255, 120, 20, ' + (glow * 0.15) + ')');
+            bgGlow.addColorStop(1, 'rgba(255, 120, 20, 0)');
+            ctx.fillStyle = bgGlow;
+            ctx.fillRect(0, 0, width, height);
+
+            // 3. Стволы и ветки деревьев в чаще
+            for (var i = 0; i < 14; i++) {
+                ctx.fillStyle = 'rgba(28, 16, 36, ' + treeDepth[i] + ')';
+                ctx.fillRect(treeX[i], 0, treeWidth[i], height);
+
+                ctx.beginPath();
+                ctx.moveTo(treeX[i] + treeWidth[i] / 2, treeBranchY[i]);
+                ctx.lineTo(treeX[i] - 40, treeBranchY[i] - 50);
+                ctx.moveTo(treeX[i] + treeWidth[i] / 2, treeBranchY[i] + 30);
+                ctx.lineTo(treeX[i] + treeWidth[i] + 40, treeBranchY[i] - 30);
+                ctx.lineWidth = treeWidth[i] * 0.3;
+                ctx.strokeStyle = 'rgba(28, 16, 36, ' + treeDepth[i] + ')';
+                ctx.stroke();
+
+                var dist = Math.max(15, Math.abs(fireX - (treeX[i] + treeWidth[i] / 2)));
+                var intensity = (glow * 35) / dist * treeDepth[i];
+                ctx.fillStyle = 'rgba(255, 140, 30, ' + Math.min(0.4, intensity) + ')';
+                
+                if (treeX[i] + treeWidth[i] / 2 < fireX) {
+                    ctx.fillRect(treeX[i] + treeWidth[i] - 3, 0, 3, height);
+                } else {
+                    ctx.fillRect(treeX[i], 0, 3, height);
+                }
+            }
+
+            // 4. Кусты и листва
+            ctx.fillStyle = '#170e22';
+            drawBush(width * 0.15, 0, 100, 10);
+            drawBush(width * 0.5, -20, 120, 12);
+            drawBush(width * 0.85, 0, 100, 10);
+
+            drawBush(width * 0.05, height * 0.8, 85, 8);
+            drawBush(width * 0.25, height * 0.82, 70, 7);
+            drawBush(width * 0.5, height * 0.85, 55, 5); 
+            drawBush(width * 0.75, height * 0.82, 75, 7);
+            drawBush(width * 0.95, height * 0.8, 90, 8);
+
+            ctx.fillStyle = 'rgba(255, 130, 20, ' + (glow * 0.2) + ')';
+            drawBush(width * 0.35, height * 0.83, 40, 4);
+            drawBush(width * 0.65, height * 0.83, 40, 4);
+
+            // 5. Дрова
+            ctx.lineWidth = 12;
+            ctx.strokeStyle = '#3d251c';
+            ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(fireX - 42, fireY + 12); ctx.lineTo(fireX + 15, fireY + 2); ctx.stroke();
+            ctx.strokeStyle = '#2d1912';
+            ctx.beginPath(); ctx.moveTo(fireX + 42, fireY + 12); ctx.lineTo(fireX - 15, fireY + 2); ctx.stroke();
+
+            // Земля
+            ctx.fillStyle = '#110a1a';
+            ctx.fillRect(0, height * 0.84, width, height * 0.16);
+
+            // Трава
+            ctx.beginPath();
+            ctx.fillStyle = '#0a0610';
+            for (var i = 0; i < width; i += 10) {
+                ctx.moveTo(i, height * 0.84);
+                ctx.lineTo(i + 3, height * 0.84 - 12);
+                ctx.lineTo(i + 6, height * 0.84);
+            }
+            ctx.fill();
+        }
+
+        window.addEventListener('pointerdown', function(e) { targetX = e.clientX; targetY = e.clientY; });
+        window.addEventListener('pointermove', function(e) { targetX = e.clientX; targetY = e.clientY; });
+        window.addEventListener('pointerup', function() { targetX = width / 2; targetY = height * 0.82; });
+
+        function animate() {
+            fireX += (targetX - fireX) * 0.12;
+            fireY += (targetY - fireY) * 0.12;
+
+            var glow = 0.8 + Math.sin(Date.now() * 0.008) * 0.2;
+
+            drawScenery(glow);
+
+            // Отрисовка пламени
+            ctx.globalCompositeOperation = 'source-over';
+            for (var i = 0; i < 90; i++) {
+                pX[i] += pVX[i]; pY[i] += pVY[i]; pLife[i] -= pDecay[i];
+                pVX[i] += Math.sin(pY[i] * 0.06) * 0.1;
+                
+                if (pLife[i] <= 0) {
+                    pX[i] = fireX + (Math.random() - 0.5) * 35;
+                    pY[i] = fireY;
+                    pVX[i] = (Math.random() - 0.5) * 1.5;
+                    pVY[i] = -Math.random() * 3 - 2;
+                    pLife[i] = 1.0;
+                    pRadius[i] = Math.random() * 22 + 12;
+                }
+                
+                ctx.beginPath();
+                ctx.arc(pX[i], pY[i], pRadius[i] * pLife[i], 0, Math.PI * 2);
+                var g = Math.floor(pLife[i] * 190);
+                ctx.fillStyle = 'rgba(255, ' + g + ', 20, ' + (pLife[i] * 0.65) + ')';
+                ctx.fill();
+            }
+
+            // Отрисовка искр
+            for (var i = 0; i < 40; i++) {
+                sX[i] += sVX[i]; sY[i] += sVY[i]; sLife[i] -= sDecay[i];
+                sVX[i] += Math.sin(sY[i] * 0.09) * 0.12;
+                
+                if (sLife[i] <= 0) {
+                    sX[i] = fireX + (Math.random() - 0.5) * 40;
+                    sY[i] = fireY - 12;
+                    sVX[i] = (Math.random() - 0.5) * 3;
+                    sVY[i] = -Math.random() * 2.5 - 1.5;
+                    sLife[i] = 1.0;
+                }
+                
+                ctx.beginPath();
+                ctx.arc(sX[i], sY[i], sSize[i], 0, Math.PI * 2);
+                var gG = Math.floor(sLife[i] * 140);
+                ctx.fillStyle = 'rgba(255, ' + gG + ', 15, ' + sLife[i] + ')';
+                ctx.fill();
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        init();
+        animate();
+    </script>
+<script data-goatcounter="https://abyss-labs.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><img src="https://donaldzou.dev" style="display:none;"/><img src="https://donaldzou.dev" style="display:none;"/>    <!-- Статистика GoatCounter -->
+    <script data-goatcounter="https://goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>
+EOF
+echo "Файл Огонь.html перезаписан на стабильных массивах!"

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Множество Жюлиа - Оптимизировано</title>
+    <meta name="description" content="Интерактивная визуализация в цифровом портфолио Eva Interactive." />
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: sans-serif;
+            user-select: none;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            image-rendering: pixelated; /* Сглаживание пикселей силами видеокарты */
+        }
+        .ui-container {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+        .info {
+            color: rgba(255,255,255,0.6);
+            font-size: 13px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.9);
+            line-height: 1.5;
+            background: rgba(0,0,0,0.6);
+            padding: 10px 14px;
+            border-radius: 6px;
+        }
+        .palette-btn {
+            pointer-events: auto;
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="julia"></canvas>
+    
+    <div class="ui-container">
+        <div class="info">
+            • Множество Жюлиа (Оптимизировано)<br>
+            • Управление: 1 палец (сдвиг), 2 пальца (зум)
+        </div>
+        <button class="palette-btn" id="paletteBtn">Стиль: Неоновая радуга</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('julia');
+        const ctx = canvas.getContext('2d');
+
+        // Глобальные размеры экрана телефона
+        let screenWidth = window.innerWidth;
+        let screenHeight = window.innerHeight;
+
+        // Жёсткое ограничение разрешения внутреннего буфера для защиты от зависаний
+        // Фрактал считается в разрешении шириной 360 пикселей, а GPU телефона растягивает его во весь экран
+        const RENDER_WIDTH = 360;
+        let renderHeight = Math.floor(RENDER_WIDTH * (screenHeight / screenWidth));
+
+        canvas.width = RENDER_WIDTH;
+        canvas.height = renderHeight;
+
+        let zoom = 0.9;
+        let centerX = 0.0;
+        let centerY = 0.0;
+
+        // Константы узора Жюлиа
+        const cr = -0.7;
+        const ci = 0.27015;
+
+        const maxIterations = 80; // Снижено со 130 до 80 для максимальной скорости
+        let colorOffset = 0;
+        let currentPalette = 0;
+        const paletteNames = ["Неоновая радуга", "Огненный космос", "Ледяное сияние"];
+
+        // Интерактив
+        let isMoving = false;
+        let startX = 0, startY = 0;
+        let startCenterX = 0, startCenterY = 0;
+        let initialPinchDist = 0;
+        let initialZoom = 1.0;
+
+        window.addEventListener('resize', () => {
+            screenWidth = window.innerWidth;
+            screenHeight = window.innerHeight;
+            renderHeight = Math.floor(RENDER_WIDTH * (screenHeight / screenWidth));
+            canvas.width = RENDER_WIDTH;
+            canvas.height = renderHeight;
+        });
+
+        document.getElementById('paletteBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            currentPalette = (currentPalette + 1) % 3;
+            e.target.innerText = "Стиль: " + paletteNames[currentPalette];
+        });
+
+        function drawJulia() {
+            const w = canvas.width;
+            const h = canvas.height;
+            const imgData = ctx.createImageData(w, h);
+            const data = imgData.data;
+
+            const ratio = w / h;
+            const sizeY = 3.0 / zoom;
+            const sizeX = sizeY * ratio;
+
+            const minX = centerX - sizeX / 2;
+            const minY = centerY - sizeY / 2;
+
+            for (let py = 0; py < h; py++) {
+                const zi_start = minY + (py / h) * sizeY;
+                for (let px = 0; px < w; px++) {
+                    const zr_start = minX + (px / w) * sizeX;
+
+                    let zr = zr_start;
+                    let zi = zi_start;
+                    let n = 0;
+
+                    // Оптимизированное вычисление
+                    while (zr * zr + zi * zi < 4.0 && n < maxIterations) {
+                        const temp = zr * zr - zi * zi + cr;
+                        zi = 2.0 * zr * zi + ci;
+                        zr = temp;
+                        n++;
+                    }
+
+                    const pixelIndex = (py * w + px) * 4;
+
+                    if (n === maxIterations) {
+                        data[pixelIndex]     = 0;
+                        data[pixelIndex + 1] = 0;
+                        data[pixelIndex + 2] = 0;
+                        data[pixelIndex + 3] = 255;
+                    } else {
+                        let r, g, b;
+                        if (currentPalette === 0) {
+                            const hue = (n * 12 + colorOffset) % 360;
+                            const rgb =快速HslToRgb(hue, 90, 50);
+                            r = rgb[0]; g = rgb[1]; b = rgb[2];
+                        } else if (currentPalette === 1) {
+                            const intensity = n / maxIterations;
+                            r = Math.floor(255 * Math.pow(intensity, 0.6));
+                            g = Math.floor(120 * Math.pow(intensity, 1.2));
+                            b = Math.floor(20 * Math.pow(intensity, 2.5));
+                        } else {
+                            const intensity = n / maxIterations;
+                            r = Math.floor(20 * Math.pow(intensity, 2.0));
+                            g = Math.floor(160 * Math.pow(intensity, 1.0));
+                            b = Math.floor(255 * Math.pow(intensity, 0.5));
+                        }
+
+                        data[pixelIndex]     = r;
+                        data[pixelIndex + 1] = g;
+                        data[pixelIndex + 2] = b;
+                        data[pixelIndex + 3] = 255;
+                    }
+                }
+            }
+            ctx.putImageData(imgData, 0, 0);
+        }
+
+        // Сверхбыстрый алгоритм HSL для мобильных процессоров
+        function 快速HslToRgb(h, s, l) {
+            s /= 100; l /= 100;
+            const k = n => (n + h / 30) % 12;
+            const a = s * Math.min(l, 1 - l);
+            const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+            return [Math.floor(255 * f(0)), Math.floor(255 * f(8)), Math.floor(255 * f(4))];
+        }
+
+        // Логика тач-событий с восстановленными индексами [0] и [1]
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                isMoving = true;
+                startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+                startCenterX = centerX;
+                startCenterY = centerY;
+            } else if (e.touches.length === 2) {
+                isMoving = false;
+                initialPinchDist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                initialZoom = zoom;
+            }
+        }, { passive: true });
+
+        canvas.addEventListener('touchmove', (e) => {
+            const ratio = screenWidth / screenHeight;
+            const sizeY = 3.0 / zoom;
+            const sizeX = sizeY * ratio;
+
+            if (isMoving && e.touches.length === 1) {
+                const dx = e.touches[0].clientX - startX;
+                const dy = e.touches[0].clientY - startY;
+                centerX = startCenterX - (dx / screenWidth) * sizeX;
+                centerY = startCenterY - (dy / screenHeight) * sizeY;
+            } else if (e.touches.length === 2) {
+                const currentDist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                if (initialPinchDist > 0) {
+                    const pinchRatio = currentDist / initialPinchDist;
+                    zoom = Math.max(0.2, initialZoom * pinchRatio);
+                }
+            }
+        }, { passive: true });
+
+        canvas.addEventListener('touchend', (e) => {
+            if (e.touches.length === 0) isMoving = false;
+        });
+
+        // Ограничение частоты кадров (Таймер вместо бесконечного requestAnimationFrame)
+        let lastFrameTime = 0;
+        const fpsInterval = 1000 / 30; // Ограничиваем рендер строго до 30 кадров в секунду
+
+        function animate(timestamp) {
+            requestAnimationFrame(animate);
+
+            const elapsed = timestamp - lastFrameTime;
+            if (elapsed > fpsInterval) {
+                lastFrameTime = timestamp - (elapsed % fpsInterval);
+                
+                colorOffset = (colorOffset + 2.0) % 360;
+                drawJulia(); 
+            }
+        }
+
+        requestAnimationFrame(animate);
+    </script>
+<script data-goatcounter="https://abyss-labs.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><img src="https://donaldzou.dev" style="display:none;"/><img src="https://donaldzou.dev" style="display:none;"/>    <!-- Статистика GoatCounter -->
+    <script data-goatcounter="https://goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>
