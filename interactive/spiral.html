@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <!-- Важно для работы с пальцем на мобильном -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Кубики в Termux</title>
+    <meta name="description" content="Интерактивная визуализация в цифровом портфолио Eva Interactive." />
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden; /* Убираем полосы прокрутки */
+            background-color: #111;
+            touch-action: none; /* Отключаем стандартное зумирование браузера */
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let width, height;
+    
+    // Настройка размера канваса под экран
+    function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Параметры частиц
+    const particles = [];
+    const count = 1500; // Количество кубиков (можно менять)
+
+    class Particle {
+        constructor() {
+            this.reset();
+        }
+
+        reset() {
+            // Случайная позиция по всему экрану
+            this.x = Math.random() * width;
+            this.y = Math.random() * height;
+            
+            // Цвет: случайный яркий оттенок
+            this.hue = Math.random() * 360;
+            this.color = `hsl(${this.hue}, 70%, 50%)`;
+            
+            // Размер кубика
+            this.size = Math.random() * 4 + 2; 
+            
+            // Скорость вращения и движения
+            this.rotation = Math.random() * Math.PI * 2;
+            this.speedX = (Math.random() - 0.5) * 2;
+            this.speedY = (Math.random() - 0.5) * 2;
+        }
+
+        update(targetX, targetY) {
+            // Логика притяжения к точке касания (эффект воронки/круга)
+            const dx = this.x - targetX;
+            const dy = this.y - targetY;
+            const distance = Math.sqrt(dx*dx + dy*dy);
+
+            // Если далеко от центра - двигаем к центру
+            if (distance > 100) {
+                this.x -= dx * 0.02;
+                this.y -= dy * 0.02;
+            } else {
+                // Если близко - заставляем вращаться по кругу
+                const angle = Math.atan2(dy, dx);
+                const radius = distance;
+                
+                // Плавное вращение вокруг точки касания
+                this.x = targetX + Math.cos(angle + Date.now() * 0.005) * radius;
+                this.y = targetY + Math.sin(angle + Date.now() * 0.005) * radius;
+            }
+
+            this.rotation += 0.1; // Кубики всегда немного крутятся сами по себе
+        }
+
+        draw() {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.rotation);
+            
+            ctx.fillStyle = this.color;
+            // Рисуем квадрат (кубик в 2D)
+            ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size);
+            
+            ctx.restore();
+        }
+    }
+
+    // Инициализация частиц
+    for (let i = 0; i < count; i++) {
+        particles.push(new Particle());
+    }
+
+    // Точка, куда тянем кубики (изначально центр)
+    let targetX = width / 2;
+    let targetY = height / 2;
+
+    // --- ОБРАБОТКА КАСАНИЙ (ПАЛЕЦ) ---
+    
+    // Для мыши (если тестируешь на ПК)
+    canvas.addEventListener('mousemove', (e) => {
+        targetX = e.clientX;
+        targetY = e.clientY;
+    });
+
+    // Для пальца (Android)
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault(); // Важно: запрещает скролл страницы
+        const touch = e.touches[0];
+        targetX = touch.clientX;
+        targetY = touch.clientY;
+    }, {passive: false});
+    
+    // При касании (чтобы точка не сбрасывалась, если палец убрали)
+    canvas.addEventListener('touchend', (e) => {
+         // Можно оставить последнюю позицию или вернуть в центр
+         // targetX = width/2; targetY = height/2; 
+    });
+
+    // Анимационный цикл
+    function animate() {
+        // Полупрозрачный черный слой для эффекта шлейфа
+        ctx.fillStyle = 'rgba(17, 17, 17, 0.3)';
+        ctx.fillRect(0, 0, width, height);
+
+        particles.forEach(particle => {
+            particle.update(targetX, targetY);
+            particle.draw();
+        });
+
+        requestAnimationFrame(animate);
+    }
+
+    animate();
+</script>
+
+<script data-goatcounter="https://abyss-labs.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><img src="https://donaldzou.dev" style="display:none;"/><img src="https://donaldzou.dev" style="display:none;"/>    <!-- Статистика GoatCounter -->
+    <script data-goatcounter="https://goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>

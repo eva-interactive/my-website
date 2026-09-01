@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Стабильный Калейдоскоп</title>
+    <meta name="description" content="Интерактивная визуализация в цифровом портфолио Eva Interactive." />
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #000000; font-family: sans-serif; user-select: none; touch-action: none; }
+        canvas { display: block; width: 100%; height: 100%; image-rendering: auto; }
+        #info {
+            position: absolute; top: 15px; left: 15px;
+            color: #fff; background: rgba(15, 23, 42, 0.95);
+            padding: 12px 18px; border-radius: 8px;
+            font-size: 14px; line-height: 1.5; pointer-events: none;
+            border: 1px solid #38bdf8;
+            z-index: 10;
+        }
+        #fps { color: #38bdf8; font-weight: bold; }
+    </style>
+</head>
+<body>
+    
+    <div id="info">
+        <strong>Redmi Pad SE • Аппаратный тач</strong><br>
+        Плавность: <span id="fps">0</span><br>
+        Управление: Водите пальцем по экрану
+    </div>
+
+    <canvas id="renderCanvas"></canvas>
+    
+    <script>
+        const canvas = document.getElementById('renderCanvas');
+        // ✅ ИСПРАВЛЕНИЕ 1: Убрали проблемные флаги, которые ломали рендер на мобильных
+        const ctx = canvas.getContext('2d'); 
+        
+        const fpsCounter = document.getElementById('fps');
+
+        let width, height;
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            
+            // ✅ ИСПРАВЛЕНИЕ 2: Убрали scaleFactor. Холст теперь равен размеру экрана.
+            // Это сильно ускоряет отрисовку на планшете.
+            canvas.width = width;
+            canvas.height = height;
+            
+            ctx.imageSmoothingEnabled = true;
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+
+        let lastTime = performance.now();
+        let frameCount = 0;
+
+        // Стартовые безопасные координаты
+        let touchX = 0.5;
+        let touchY = 0.5;
+        let targetTouchX = 0.5;
+        let targetTouchY = 0.5;
+
+        const sectors = 8;
+
+        // 20 идеальных фигур для сочного рисунка
+        const shapes = [];
+        const shapeCount = 20;
+        for (let i = 0; i < shapeCount; i++) {
+            shapes.push({
+                radius: Math.random() * 150 + 40,
+                size: Math.random() * 20 + 8,
+                sides: Math.floor(Math.random() * 3) + 3, // Треугольники, квадраты, пятиугольники
+                angle: Math.random() * Math.PI * 2,
+                localRot: Math.random() * Math.PI,
+                rotSpeed: (Math.random() - 0.5) * 0.012,
+                localRotSpeed: (Math.random() - 0.5) * 0.03,
+                hue: Math.floor(Math.random() * 360),
+                hueSpeed: Math.random() * 0.3 + 0.2
+            });
+        }
+
+        // НАДЕЖНЫЙ ОДНОПОТОЧНЫЙ ПОИНТЕР-ИНТЕРФЕЙС
+        window.addEventListener('pointermove', (e) => {
+            const x = e.clientX / window.innerWidth;
+            const y = e.clientY / window.innerHeight;
+            if (!isNaN(x) && !isNaN(y)) {
+                targetTouchX = x;
+                targetTouchY = y;
+            }
+        });
+
+        function drawPolygon(ctx, x, y, radius, sides, angle) {
+            ctx.beginPath();
+            const step = (Math.PI * 2) / sides;
+            for (let i = 0; i < sides; i++) {
+                const px = x + Math.cos(angle + i * step) * radius;
+                const py = y + Math.sin(angle + i * step) * radius;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+        }
+
+        function draw(time) {
+            const cx = width / 2;
+            const cy = height / 2;
+
+            // Плавное следование за пальцем
+            touchX += (targetTouchX - touchX) * 0.08;
+            touchY += (targetTouchY - touchY) * 0.08;
+
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, width, height);
+
+            for (let i = 0; i < shapes.length; i++) {
+                let s = shapes[i];
+                s.angle += s.rotSpeed * (0.6 + touchX * 1.2);
+                s.localRot += s.localRotSpeed;
+                s.hue = (s.hue + s.hueSpeed) % 360;
+            }
+
+            const sectorAngle = (Math.PI * 2) / sectors;
+
+            for (let s = 0; s < sectors; s++) {
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.rotate(s * sectorAngle);
+
+                if (s % 2 === 1) {
+                    ctx.scale(1, -1);
+                }
+
+                for (let i = 0; i < shapes.length; i++) {
+                    const shape = shapes[i];
+
+                    const currentRadius = shape.radius * (0.5 + touchY * 0.9);
+                    const fx = Math.cos(shape.angle) * currentRadius;
+                    const fy = Math.sin(shape.angle) * currentRadius;
+
+                    const alpha = 0.25 + Math.abs(Math.sin(time * 0.4 + i * 0.15)) * 0.45;
+
+                    ctx.fillStyle = `hsla(${shape.hue}, 95%, 55%, ${alpha})`;
+                    ctx.strokeStyle = `hsla(${shape.hue}, 100%, 75%, ${alpha * 0.6})`;
+                    ctx.lineWidth = 1.2;
+
+                    drawPolygon(ctx, fx, fy, shape.size, shape.sides, shape.localRot);
+                    ctx.fill();
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+        }
+
+        function updateFPS() {
+            frameCount++;
+            const now = performance.now();
+            if (now - lastTime >= 1000) {
+                fpsCounter.textContent = frameCount + ' FPS';
+                frameCount = 0;
+                lastTime = now;
+            }
+        }
+
+        function loop() {
+            draw(performance.now() * 0.001);
+            updateFPS();
+            requestAnimationFrame(loop);
+        }
+
+        loop();
+    </script>
+<script data-goatcounter="https://abyss-labs.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><img src="https://donaldzou.dev" style="display:none;"/><img src="https://donaldzou.dev" style="display:none;"/>    <!-- Статистика GoatCounter -->
+    <script data-goatcounter="https://goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>

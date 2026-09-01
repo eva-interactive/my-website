@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Оптимизированный Живой Лес</title>
+    <meta name="description" content="Интерактивная визуализация в цифровом портфолио Eva Interactive." />
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #bae6fd; font-family: sans-serif; user-select: none; touch-action: none; }
+        canvas { display: block; width: 100%; height: 100%; }
+        #info {
+            position: absolute; top: 15px; left: 15px;
+            color: #0f172a; background: rgba(255, 255, 255, 0.95);
+            padding: 14px 20px; border-radius: 10px;
+            font-size: 14px; line-height: 1.5; pointer-events: none;
+            border: 1px solid #16a34a;
+        }
+        #fps { color: #16a34a; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="info">
+        <strong>Redmi Pad SE • Живой Лес (Финал)</strong><br>
+        Плавность: <span id="fps">0</span><br>
+        Режим: 100% Безопасный рендеринг листьев и травы
+    </div>
+
+    <canvas id="renderCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('renderCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const fpsCounter = document.getElementById('fps');
+
+        let width, height;
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width / 1.35; 
+            canvas.height = height / 1.35;
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        let windForce = 1;
+        let lastTime = performance.now();
+        let frameCount = 0;
+
+        // Облака
+        const cloudParticles = [];
+        for(let i=0; i<20; i++) {
+            cloudParticles.push({
+                x: Math.random() * 1.5 - 0.2,
+                y: 0.04 + Math.random() * 0.12,
+                size: 25 + Math.random() * 30,
+                speed: 0.0002 + Math.random() * 0.0004,
+                opacity: 0.08 + Math.random() * 0.12
+            });
+        }
+
+        // Листопад (Безопасная физика)
+        const leaves = [];
+        for(let i=0; i<25; i++) {
+            leaves.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * -canvas.height,
+                size: 4 + Math.random() * 3,
+                speedY: 1.0 + Math.random() * 1.2,
+                speedX: 0.4 + Math.random() * 0.8,
+                angle: Math.random() * Math.PI,
+                rotSpeed: (Math.random() - 0.5) * 0.04,
+                color: Math.random() > 0.3 ? '#16a34a' : '#15803d'
+            });
+        }
+
+        // Структура травы
+        const grassBlades = [];
+        const grassCount = 85;
+        for(let i=0; i<grassCount; i++) {
+            const greenHue = 95 + Math.floor(Math.random() * 50);
+            grassBlades.push({
+                x: i,
+                height: 35 + Math.random() * 25,
+                width: 2.0 + Math.random() * 1.5,
+                color: `rgb(21, ${greenHue}, 61)`,
+                phase: Math.random() * Math.PI
+            });
+        }
+
+        window.addEventListener('touchstart', () => { windForce = 3.5; });
+        window.addEventListener('touchmove', () => { windForce = 3.5; });
+        window.addEventListener('touchend', () => { windForce = 1; });
+
+        // --- БЕЗОПАСНОЕ ФРАКТАЛЬНОЕ ДЕРЕВО ---
+        function drawNaturalTree(ctx, startX, startY, len, angle, branchWidth, depth, time, isBack) {
+            ctx.beginPath();
+            ctx.save();
+            
+            const sway = Math.sin(time * 2.8 + depth * 0.7) * (isBack ? 0.02 : 0.035) * windForce * (8 - depth);
+            
+            ctx.translate(startX, startY);
+            ctx.rotate(angle + sway);
+            ctx.moveTo(0, 0);
+            ctx.lineTo(0, -len);
+            
+            ctx.strokeStyle = isBack ? '#475569' : '#451a03';
+            ctx.lineWidth = branchWidth;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+
+            if (depth <= 0) {
+                // ЗАМЕНА: вместо тяжелого ellipse() используем простые быстрые круги для шапок листьев
+                ctx.fillStyle = isBack ? 'rgba(74, 222, 128, 0.4)' : 'rgba(22, 101, 52, 0.85)';
+                ctx.beginPath();
+                ctx.arc(0, -len, 8, 0, Math.PI * 2);
+                ctx.arc(4, -len - 4, 7, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+                return;
+            }
+
+            drawNaturalTree(ctx, 0, -len, len * 0.75, 0.38, branchWidth * 0.72, depth - 1, time, isBack);
+            drawNaturalTree(ctx, 0, -len, len * 0.70, -0.34, branchWidth * 0.68, depth - 1, time, isBack);
+
+            ctx.restore();
+        }
+
+        function drawScene(time) {
+            const w = canvas.width;
+            const h = canvas.height;
+
+            // Небо
+            const skyGrad = ctx.createLinearGradient(0, 0, 0, h * 0.65);
+            skyGrad.addColorStop(0, '#0284c7');
+            skyGrad.addColorStop(0.5, '#38bdf8');
+            skyGrad.addColorStop(0.8, '#e0f2fe');
+            skyGrad.addColorStop(1, '#f0fdf4');
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(0, 0, w, h);
+
+            // Солнце
+            ctx.fillStyle = 'rgba(254, 240, 138, 0.15)';
+            ctx.beginPath(); ctx.arc(w * 0.15, h * 0.2, 90, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fef08a';
+            ctx.beginPath(); ctx.arc(w * 0.15, h * 0.2, 25, 0, Math.PI * 2); ctx.fill();
+
+            // Облака
+            for (let i = 0; i < cloudParticles.length; i++) {
+                let p = cloudParticles[i];
+                p.x += p.speed * windForce;
+                if (p.x > 1.2) p.x = -0.2;
+                ctx.fillStyle = `rgba(255, 255, 255, ${p.opacity})`;
+                ctx.beginPath(); ctx.arc(p.x * w, p.y * h, p.size, 0, Math.PI * 2); ctx.fill();
+            }
+
+            // Задний холм
+            ctx.fillStyle = '#86efac';
+            ctx.beginPath(); ctx.moveTo(0, h);
+            for (let x = 0; x <= w; x += 30) {
+                ctx.lineTo(x, h * 0.50 + Math.sin(x * 0.003 + time * 0.04) * 25);
+            }
+            ctx.lineTo(w, h); ctx.fill();
+
+            // Лес заднего плана
+            drawNaturalTree(ctx, w * 0.45, h * 0.56, 22, 0.02, 3.5, 5, time, true);
+            drawNaturalTree(ctx, w * 0.55, h * 0.57, 18, -0.05, 3.0, 5, time, true);
+
+            // Средний холм
+            ctx.fillStyle = '#4ade80';
+            ctx.beginPath(); ctx.moveTo(0, h);
+            for (let x = 0; x <= w; x += 25) {
+                ctx.lineTo(x, h * 0.60 + Math.sin(x * 0.005 - time * 0.02) * 20);
+            }
+            ctx.lineTo(w, h); ctx.fill();
+
+            // Главный фрактальный лес
+            drawNaturalTree(ctx, w * 0.15, h * 0.68, 48, 0.03, 8, 6, time, false); 
+            drawNaturalTree(ctx, w * 0.32, h * 0.74, 35, -0.08, 6.5, 6, time, false); 
+            drawNaturalTree(ctx, w * 0.82, h * 0.70, 44, -0.02, 7.5, 6, time, false); 
+
+            // Ближний луг
+            ctx.fillStyle = '#16a34a';
+            ctx.beginPath();
+            ctx.arc(w * 0.5, h * 1.5, h * 0.7, 0, Math.PI * 2); // Замена ellipse на большой круг
+            ctx.fill();
+
+            // Отрисовка травы
+            for (let i = 0; i < grassBlades.length; i++) {
+                const gb = grassBlades[i];
+                const grassX = (gb.x * (w / grassCount));
+                const grassY = h * 0.89;
+                const sway = Math.sin(time * 4.2 + gb.phase) * 15 * windForce;
+
+                ctx.strokeStyle = gb.color;
+                ctx.lineWidth = gb.width;
+                ctx.beginPath();
+                ctx.moveTo(grassX, h);
+                ctx.quadraticCurveTo(grassX + sway * 0.25, grassY - gb.height * 0.4, grassX + sway, grassY - gb.height);
+                ctx.stroke();
+            }
+
+            // Отрисовка листопада
+            for(let i=0; i<leaves.length; i++) {
+                let lf = leaves[i];
+                lf.y += lf.speedY;
+                lf.x += lf.speedX * windForce;
+                lf.angle += lf.rotSpeed * windForce;
+
+                if(lf.y > h || lf.x > w) {
+                    lf.y = Math.random() * -100;
+                    lf.x = Math.random() * (w * 0.8);
+                    lf.angle = Math.random() * Math.PI;
+                }
+
+                ctx.save();
+                ctx.translate(lf.x, lf.y);
+                ctx.rotate(lf.angle);
+                ctx.fillStyle = lf.color;
+                
+                // ЗАМЕНА: вместо ellipse() рисуем листик через быстрый квадрат/ромб
+                ctx.fillRect(-lf.size/2, -lf.size, lf.size, lf.size * 1.8);
+                ctx.restore();
+            }
+        }
+
+        function updateFPS() {
+            frameCount++;
+            const now = performance.now();
+            if (now - lastTime >= 1000) {
+                fpsCounter.textContent = frameCount + ' FPS';
+                frameCount = 0;
+                lastTime = now;
+            }
+        }
+
+        function loop() {
+            try {
+                drawScene(performance.now() * 0.001);
+                updateFPS();
+                requestAnimationFrame(loop);
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        loop();
+    </script>
+<script data-goatcounter="https://abyss-labs.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><img src="https://donaldzou.dev" style="display:none;"/><img src="https://donaldzou.dev" style="display:none;"/>    <!-- Статистика GoatCounter -->
+    <script data-goatcounter="https://goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>

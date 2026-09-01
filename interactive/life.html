@@ -1,0 +1,190 @@
+cat << 'EOF' > life.html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Био-симулятор: Жизнь</title>
+    <meta name="description" content="Интерактивная визуализация в цифровом портфолио Eva Interactive." />
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #020204; touch-action: none; font-family: sans-serif; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #hud {
+            position: absolute; top: 4%; left: 50%; transform: translateX(-50%);
+            color: rgba(0, 255, 150, 0.4); font-size: 13px; text-align: center;
+            pointer-events: none; width: 90%; letter-spacing: 1px; line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="hud">МАТЕМАТИЧЕСКИЙ БИО-СИМУЛЯТОР «ЖИЗНЬ»<br><span style="color:#ffffff;">Ведите пальцем по экрану, чтобы засеять мир живыми клетками</span></div>
+    <canvas id="lifeCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('lifeCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const dpr = window.devicePixelRatio || 1;
+        let w = canvas.width = window.innerWidth * dpr;
+        let h = canvas.height = window.innerHeight * dpr;
+        canvas.style.width = window.innerWidth + 'px';
+        canvas.style.height = window.innerHeight + 'px';
+
+        // Размер одной биологической клетки в пикселях (оптимально для экранов телефонов)
+        const cellSize = Math.floor(6 * dpr);
+        const cols = Math.floor(w / cellSize);
+        const rows = Math.floor(h / cellSize);
+
+        // Создаем сетку мира (двумерные массивы: текущий и следующий шаг)
+        let grid = createGrid();
+        let nextGrid = createGrid();
+        let isDrawing = false;
+        let lastHue = 120; // Стартовый зеленый био-неон
+
+        function createGrid() {
+            let arr = new Array(rows);
+            for (let r = 0; r < rows; r++) {
+                arr[r] = new Array(cols).fill(0); // 0 - пустая клетка
+            }
+            return arr;
+        }
+
+        // Заполнение случайными колониями на старте, чтобы мир не был пустым
+        function randomSeed() {
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    if (Math.random() < 0.15) {
+                        grid[r][c] = Math.floor(Math.random() * 360); // Храним оттенок цвета живой клетки
+                    }
+                }
+            }
+        }
+
+        // Интерактивное рисование пальцем (засеивание жизни)
+        function addCells(e) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = (e.clientX - rect.left) * dpr;
+            const mouseY = (e.clientY - rect.top) * dpr;
+            
+            const targetCol = Math.floor(mouseX / cellSize);
+            const targetRow = Math.floor(mouseY / cellSize);
+
+            // Меняем цвет кисти со временем для красивых разноцветных цивилизаций
+            lastHue = (lastHue + 0.5) % 360;
+
+            // Засеиваем клетки небольшим радиусом (мазком кисти), чтобы было эффектно
+            const brushRadius = 3;
+            for (let r = -brushRadius; r <= brushRadius; r++) {
+                for (let c = -brushRadius; c <= brushRadius; c++) {
+                    const currRow = targetRow + r;
+                    const currCol = targetCol + c;
+                    
+                    if (currRow >= 0 && currRow < rows && currCol >= 0 && currCol < cols) {
+                        if (Math.random() < 0.7) {
+                            grid[currRow][currCol] = Math.floor(lastHue);
+                        }
+                    }
+                }
+            }
+        }
+
+        window.addEventListener('pointerdown', (e) => { isDrawing = true; addCells(e); });
+        window.addEventListener('pointermove', (e) => { if (isDrawing) addCells(e); });
+        window.addEventListener('pointerup', () => { isDrawing = false; });
+        window.addEventListener('pointercancel', () => { isDrawing = false; });
+
+        // Подсчет соседей для конкретной клетки во всех 8 направлениях (торроидальное поле - края зациклены)
+        function countNeighbors(grid, r, c) {
+            let sum = 0;
+            let parentHue = grid[r][c];
+            let neighborHues = [];
+
+            for (let i = -1; i < 2; i++) {
+                for (let j = -1; j < 2; j++) {
+                    if (i === 0 && j === 0) continue;
+                    
+                    // Эффект бескрайнего мира (если клетка уходит за правый край, она видит соседа слева)
+                    const row = (r + i + rows) % rows;
+                    const col = (c + j + cols) % cols;
+                    
+                    if (grid[row][col] > 0) {
+                        sum++;
+                        neighborHues.push(grid[row][col]);
+                    }
+                }
+            }
+            return { count: sum, hues: neighborHues };
+        }
+
+        // Основной шаг эволюции
+        function updateLife() {
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const state = grid[r][c];
+                    const neighborData = countNeighbors(grid, r, c);
+                    const neighbors = neighborData.count;
+
+                    if (state === 0 && neighbors === 3) {
+                        // Правило 1: Рождение новой клетки. Она наследует средний цвет своих родителей!
+                        const avgHue = neighborData.hues.reduce((a, b) => a + b, 0) / 3;
+                        nextGrid[r][c] = Math.floor(avgHue);
+                    } else if (state > 0 && (neighbors < 2 || neighbors > 3)) {
+                        // Правило 2: Смерть от одиночества или перенаселения
+                        nextGrid[r][c] = 0;
+                    } else {
+                        // Правило 3: Клетка выживает и сохраняет свою жизнь
+                        nextGrid[r][c] = state;
+                    }
+                }
+            }
+            // Меняем сетки местами (оптимизация буферизации)
+            let temp = grid;
+            grid = nextGrid;
+            nextGrid = temp;
+        }
+
+        function draw() {
+            // Рисуем легкий полупрозрачный фон для эффекта красивого свечения угасающих колоний
+            ctx.fillStyle = 'rgba(2, 2, 4, 0.25)';
+            ctx.fillRect(0, 0, w, h);
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const hue = grid[r][c];
+                    if (hue > 0) {
+                        // Отрисовка живой неоновой клетки
+                        ctx.fillStyle = `hsl(${hue}, 100%, 55%)`;
+                        ctx.fillRect(c * cellSize, r * cellSize, cellSize - dpr, cellSize - dpr);
+                    }
+                }
+            }
+        }
+
+        // Ограничиваем скорость эволюции, чтобы картинка не сливалась в бешеную кашу (оптимально 24 кадра эволюции в сек)
+        let lastUpdateTime = 0;
+        const updateInterval = 40; 
+
+        function tick(timestamp) {
+            if (timestamp - lastUpdateTime > updateInterval) {
+                updateLife();
+                lastUpdateTime = timestamp;
+            }
+            draw();
+            requestAnimationFrame(tick);
+        }
+
+        // Старт
+        randomSeed();
+        requestAnimationFrame(tick);
+
+        window.addEventListener('resize', () => {
+            w = canvas.width = window.innerWidth * dpr; h = canvas.height = window.innerHeight * dpr;
+            canvas.style.width = window.innerWidth + 'px'; canvas.style.height = window.innerHeight + 'px';
+        });
+    </script>
+<script data-goatcounter="https://abyss-labs.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><img src="https://donaldzou.dev" style="display:none;"/><img src="https://donaldzou.dev" style="display:none;"/>    <!-- Статистика GoatCounter -->
+    <script data-goatcounter="https://goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>
+EOF

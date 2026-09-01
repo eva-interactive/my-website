@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Космос: Парад Планет (Исправленный)</title>
+    <meta name="description" content="Интерактивная визуализация в цифровом портфолио Eva Interactive." />
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #020208;
+            font-family: sans-serif;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        /* Панель управления сверху экрана */
+        #nav-panel {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 12px 20px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            gap: 15px;
+            white-space: nowrap;
+        }
+        .nav-btn {
+            color: #4D96FF;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        #nav-panel span {
+            color: rgba(255,255,255,0.3);
+        }
+        .nav-btn:active {
+            color: #ffffff;
+        }
+    </style>
+</head>
+<body>
+    <div id="nav-panel">
+        <div class="nav-btn" onclick="setZoom(500)">ПРИБЛИЗИТЬ</div>
+        <span>|</span>
+        <div class="nav-btn" onclick="setZoom(1500)">ОТДАЛИТЬ</div>
+        <span>||</span>
+        <div class="nav-btn" onclick="setView(-1.4)">ВИД СВЕРХУ</div>
+        <span>|</span>
+        <div class="nav-btn" onclick="setView(-0.3)">ВИД СБОКУ</div>
+    </div>
+
+    <canvas id="space"></canvas>
+
+    <script>
+        const canvas = document.getElementById('space');
+        const ctx = canvas.getContext('2d');
+
+        function resize() {
+            canvas.width = window.innerWidth * window.devicePixelRatio;
+            canvas.height = window.innerHeight * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        let cameraDistance = 900;
+        let targetCameraDistance = 900;
+
+        let angleX = -0.3;
+        let targetAngleX = -0.3;
+        let angleY = 0.5;
+
+        let totalEarthDays = 0;
+
+        window.setZoom = function(val) { targetCameraDistance = val; };
+        window.setView = function(val) { targetAngleX = val; };
+
+        const planetTemplates = [
+            { name: 'Меркурий', orbit: 110, speed: 0.03,  size: 5,  color: '#888888' },
+            { name: 'Венера',   orbit: 160, speed: 0.02,  size: 9,  color: '#e3bb76' },
+            { name: 'Земля',    orbit: 220, speed: 0.015, size: 10, color: '#2b82c9', isEarth: true },
+            { name: 'Марс',     orbit: 280, speed: 0.012, size: 7,  color: '#c1440e' },
+            { name: 'Юпитер',   orbit: 380, speed: 0.008, size: 22, color: '#b07f35' },
+            { name: 'Сатурн',   orbit: 480, speed: 0.006, size: 18, color: '#e2bf7d', hasRings: true },
+            { name: 'Уран',     orbit: 560, speed: 0.004, size: 14, color: '#4b70dd' },
+            { name: 'Нептун',   orbit: 640, speed: 0.003, size: 13, color: '#274687' }
+        ];
+
+        const planets = planetTemplates.map(p => ({
+            ...p,
+            angle: (Math.random() * 0.2) - 0.1
+        }));
+
+        let moonAngle = 0;
+
+        function project(x, y, z, width, height) {
+            let cosX = Math.cos(angleX), sinX = Math.sin(angleX);
+            let y1 = y * cosX - z * sinX;
+            let z1 = y * sinX + z * cosX;
+
+            let cosY = Math.cos(angleY), sinY = Math.sin(angleY);
+            let x2 = x * cosY - z1 * sinY;
+            let z2 = x * sinY + z1 * cosY;
+
+            const fov = 700;
+            // Защита от деления на ноль или отрицательное число
+            const denominator = fov + z2 + cameraDistance;
+            const scale = denominator > 0 ? fov / denominator : 0;
+
+            return {
+                x: (x2 * scale) + width / 2,
+                y: (y1 * scale) + height / 2,
+                z: z2,
+                scale: scale
+            };
+        }
+
+        function animate() {
+            const w = canvas.width / window.devicePixelRatio;
+            const h = canvas.height / window.devicePixelRatio;
+
+            ctx.fillStyle = '#020208';
+            ctx.fillRect(0, 0, w, h);
+
+            angleY += 0.002;
+            cameraDistance += (targetCameraDistance - cameraDistance) * 0.05;
+            angleX += (targetAngleX - angleX) * 0.05;
+
+            totalEarthDays += 0.138;
+
+            const renderQueue = [];
+
+            // --- ГЕНЕРАЦИЯ И ОТРИСОВКА ЗВЁЗД (В ОЧЕРЕДИ) ---
+            let seed = 12345;
+            function pseudoRandom() {
+                seed = (seed * 9301 + 49297) % 233280;
+                return seed / 233280;
+            }
+
+            // Теперь можно ставить много звёзд, они не зальют экран
+            for (let i = 0; i < 2000; i++) { 
+                let sx = (pseudoRandom() - 0.5) * 3000;
+                let sy = (pseudoRandom() - 0.5) * 3000;
+                let sz = (pseudoRandom() - 0.5) * 3000;
+                
+                // ГЛАВНОЕ ИСПРАВЛЕНИЕ: Отсекаем звёзды, которые слишком близко к камере
+                // Если звезда ближе, чем дистанция камеры (минус запас), она может стать огромной
+                if (sz < -cameraDistance + 200) continue; 
+
+                let size = pseudoRandom() * 1.3 + 0.2;
+                let colorType = pseudoRandom();
+
+                if (colorType > 0.90) ctx.fillStyle = 'rgba(173, 216, 230, 0.7)'; 
+                else if (colorType > 0.80) ctx.fillStyle = 'rgba(255, 240, 150, 0.7)'; 
+                else ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'; 
+
+                let pt = project(sx, sy, sz, w, h);
+                
+                // Если звезда ушла за камеру (масштаб <= 0), не рисуем её
+                if (pt.scale <= 0) continue;
+
+                renderQueue.push({
+                    z: pt.z, // Глубина для сортировки
+                    draw: () => {
+                        ctx.beginPath();
+                        // Рисуем звезду
+                        ctx.arc(pt.x, pt.y, size * pt.scale, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                });
+            }
+
+            // Солнце
+            const sunPt = project(0, 0, 0, w, h);
+            renderQueue.push({
+                z: sunPt.z,
+                draw: () => {
+                    ctx.fillStyle = '#ffcc00';
+                    ctx.beginPath();
+                    ctx.arc(sunPt.x, sunPt.y, 35 * sunPt.scale, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+
+            moonAngle += 0.06;
+
+            // Планеты
+            planets.forEach(p => {
+                p.angle += p.speed * 0.15;
+
+                const planetX = Math.cos(p.angle) * p.orbit;
+                const planetZ = Math.sin(p.angle) * p.orbit;
+                const pt = project(planetX, 0, planetZ, w, h);
+
+                // Отрисовка орбит (прямая отрисовка, так как они всегда далеко и полупрозрачны)
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                for(let a = 0; a < Math.PI * 2; a += 0.1) {
+                    let opt = project(Math.cos(a) * p.orbit, 0, Math.sin(a) * p.orbit, w, h);
+                    if(a === 0) ctx.moveTo(opt.x, opt.y);
+                    else ctx.lineTo(opt.x, opt.y);
+                }
+                ctx.closePath();
+                ctx.stroke();
+
+                // Добавляем планету в очередь
+                renderQueue.push({
+                    z: pt.z,
+                    draw: () => {
+                        ctx.fillStyle = p.color;
+                        ctx.beginPath();
+                        ctx.arc(pt.x, pt.y, p.size * pt.scale, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        if(p.hasRings) {
+                            ctx.strokeStyle = 'rgba(210, 180, 140, 0.5)';
+                            ctx.lineWidth = 3 * pt.scale;
+                            ctx.save();
+                            ctx.translate(pt.x, pt.y);
+                            ctx.scale(1.8, 0.4);
+                            ctx.beginPath();
+                            ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+                            ctx.stroke();
+                            ctx.restore();
+                        }
+
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                        ctx.font = '11px sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(p.name, pt.x, pt.y + (p.size * pt.scale) + 14);
+                    }
+                });
+
+                // Луна для Земли
+                if (p.isEarth) {
+                    const moonX = planetX + Math.cos(moonAngle) * 16;
+                    const moonZ = planetZ + Math.sin(moonAngle) * 16;
+                    const moonPt = project(moonX, 0, moonZ, w, h);
+
+                    renderQueue.push({
+                        z: moonPt.z,
+                        draw: () => {
+                            ctx.fillStyle = '#aaaaaa';
+                            ctx.beginPath();
+                            ctx.arc(moonPt.x, moonPt.y, 2 * moonPt.scale, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    });
+                }
+            });
+
+            // СОРТИРОВКА: От самого дальнего (малый Z) к самому близкому (большой Z)
+            // Это критически важно для правильной прозрачности
+            renderQueue.sort((a, b) => a.z - b.z);
+            
+            // Отрисовка всего по очереди
+            renderQueue.forEach(item => item.draw());
+
+            // Текст календаря (поверх всего)
+            ctx.save();
+            ctx.font = '11px monospace';
+            ctx.fillStyle = '#79DAE8';
+            ctx.fillText('ДНИ: ' + Math.floor(totalEarthDays), 20, 30);
+            ctx.fillText('ЛЕТ: ' + (totalEarthDays / 365.25).toFixed(2), 20, 45);
+            ctx.restore();
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+<script data-goatcounter="https://abyss-labs.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><img src="https://donaldzou.dev" style="display:none;"/><img src="https://donaldzou.dev" style="display:none;"/>    <!-- Статистика GoatCounter -->
+    <script data-goatcounter="https://goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>

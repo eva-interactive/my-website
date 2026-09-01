@@ -1,0 +1,261 @@
+cat << 'EOF' > tower.html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Неоновая Башня</title>
+    <meta name="description" content="Интерактивная визуализация в цифровом портфолио Eva Interactive." />
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #05050a; touch-action: none; font-family: sans-serif; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #score-board {
+            position: absolute; top: 5%; left: 50%; transform: translateX(-50%);
+            color: #ffffff; font-size: 32px; font-weight: 900; text-align: center;
+            z-index: 999; pointer-events: none;
+            text-shadow: 0 0 10px #00f0ff, 0 0 20px #00f0ff;
+        }
+        #game-over-screen {
+            position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
+            color: #ff2a6d; font-size: 28px; font-weight: 900; text-align: center;
+            z-index: 999; pointer-events: none; display: none;
+            text-shadow: 0 0 15px #ff2a6d;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="score-board">СЧЕТ: 0</div>
+    <div id="game-over-screen">ИГРА ОКОНЧЕНА!<br><span style="font-size:16px; color:#fff;">Тапните, чтобы начать заново</span></div>
+    
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        let w = canvas.width = window.innerWidth * dpr;
+        let h = canvas.height = window.innerHeight * dpr;
+        canvas.style.width = window.innerWidth + 'px';
+        canvas.style.height = window.innerHeight + 'px';
+
+        let cx = w / 2, cy = h / 2;
+        const fov = 500;
+
+        let score = 0;
+        let gameOver = false;
+        
+        // Переменные камеры (чтобы сцена плавно опускалась при росте башни)
+        let cameraY = 0;
+        let targetCameraY = 0;
+
+        // Отрезанные кусочки (искры)
+        const sparks = [];
+
+        // Структура одного блока башни
+        class Block {
+            constructor(y, width, x = 0, speed = 4) {
+                this.y = y; // Высота в 3D мире
+                this.w = width; // Ширина блока
+                this.x = x; // Текущая позиция по горизонтали
+                this.vx = speed * dpr; // Скорость полета
+                this.hue = (score * 25) % 360; // Меняем цвет каждого уровня
+            }
+            update() {
+                if (gameOver) return;
+                this.x += this.vx;
+                // Отскок от виртуальных стен экрана
+                if (this.x > 180 * dpr || this.x < -180 * dpr) {
+                    this.vx *= -1;
+                }
+            }
+        }
+
+        // Хранилище всех установленных блоков башни
+        let stack = [];
+        let currentBlock;
+
+        // Функция сброса игры
+        function initGame() {
+            score = 0;
+            gameOver = false;
+            cameraY = 0;
+            targetCameraY = 0;
+            document.getElementById('score-board').innerText = "СЧЕТ: 0";
+            document.getElementById('game-over-screen').display = "none";
+            document.getElementById('game-over-screen').style.display = "none";
+            
+            stack = [
+                new Block(0, 160 * dpr, 0, 0) // Основание башни (фундамент)
+            ];
+            spawnNext();
+        }
+
+        function spawnNext() {
+            const prev = stack[stack.length - 1];
+            // Каждый новый блок летит чуть выше предыдущего на 35 пикселей
+            currentBlock = new Block(prev.y - 35 * dpr, prev.w, -170 * dpr, 4 + score * 0.2);
+            targetCameraY = -prev.y + 100 * dpr; // Двигаем камеру вверх за башней
+        }
+
+        // Обработка тача (клик по экрану ставит блок)
+        window.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (gameOver) {
+                initGame();
+                return;
+            }
+
+            const prev = stack[stack.length - 1];
+            
+            // Вычисляем границы перекрытия
+            const diff = currentBlock.x - prev.x;
+            const absDiff = Math.abs(diff);
+
+            if (absDiff >= prev.w) {
+                // Полный промах — проиграли!
+                gameOver = true;
+                document.getElementById('game-over-screen').style.display = "block";
+                return;
+            }
+
+            // Идеальная стыковка или подрезка блока
+            let newWidth = prev.w - absDiff;
+            let newX = diff > 0 ? prev.x + absDiff / 2 : prev.x - absDiff / 2;
+
+            // Генерируем искры на месте отрезания края
+            const sparkX = diff > 0 ? currentBlock.x + newWidth/2 : currentBlock.x - newWidth/2;
+            createSparks(sparkX, currentBlock.y, currentBlock.hue);
+
+            // Обрезаем летающий блок и фиксируем его в башне
+            currentBlock.w = newWidth;
+            currentBlock.x = newX;
+            stack.push(currentBlock);
+
+            score++;
+            document.getElementById('score-board').innerText = "СЧЕТ: " + score;
+
+            spawnNext();
+        });
+
+        // Класс искры-осколка блока
+        class Spark {
+            constructor(x, y, hue) {
+                this.x = x; this.y = y;
+                this.vx = (Math.random() - 0.5) * 8 * dpr;
+                this.vy = (Math.random() - 3) * dpr;
+                this.hue = hue; this.alpha = 1;
+                this.decay = Math.random() * 0.03 + 0.02;
+            }
+            update() {
+                this.x += this.vx; this.y += this.vy;
+                this.vy += 0.2 * dpr; // Гравитация для искр
+                this.alpha -= this.decay;
+            }
+        }
+
+        function createSparks(x, y, hue) {
+            for (let i = 0; i < 30; i++) {
+                sparks.push(new Spark(x, y, hue));
+            }
+        }
+
+        // Отрисовка красивого объемного 3D-параллелепипеда (блока) на 2D Canvas
+        function draw3DBlock(x3d, y3d, z3d, blockW, blockH, blockD, hue) {
+            // Фронтальные координаты с учетом движения камеры
+            const renderY = y3d + cameraY;
+
+            // Перспективная проекция передней и задней плоскостей
+            const scaleFront = fov / (z3d + 500);
+            const scaleBack = fov / (z3d + 500 + blockD);
+
+            const fx = cx + x3d * scaleFront;
+            const fy = cy + renderY * scaleFront;
+            const fw = blockW * scaleFront;
+            const fh = blockH * scaleFront;
+
+            const bx = cx + x3d * scaleBack;
+            const by = cy + renderY * scaleBack;
+            const bw = blockW * scaleBack;
+            const bh = blockH * scaleBack;
+
+            // Рисуем видимую верхнюю грань блока (3D крышка)
+            ctx.fillStyle = `hsl(${hue}, 95%, 55%)`;
+            ctx.beginPath();
+            ctx.moveTo(fx - fw/2, fy - fh/2);
+            ctx.lineTo(fx + fw/2, fy - fh/2);
+            ctx.lineTo(bx + bw/2, by - bh/2);
+            ctx.lineTo(bx - bw/2, by - bh/2);
+            ctx.closePath(); ctx.fill();
+
+            // Рисуем переднюю грань
+            ctx.fillStyle = `hsl(${hue}, 95%, 45%)`;
+            ctx.fillRect(fx - fw/2, fy - fh/2, fw, fh);
+
+            // Рисуем боковую правую грань для объема
+            ctx.fillStyle = `hsl(${hue}, 95%, 35%)`;
+            ctx.beginPath();
+            ctx.moveTo(fx + fw/2, fy - fh/2);
+            ctx.lineTo(bx + bw/2, by - bh/2);
+            ctx.lineTo(bx + bw/2, by + bh/2);
+            ctx.lineTo(fx + fw/2, fy + fh/2);
+            ctx.closePath(); ctx.fill();
+
+            // Добавляем красивую тонкую неоновую обводку ребер
+            ctx.strokeStyle = `hsl(${hue}, 100%, 75%)`;
+            ctx.lineWidth = 1 * dpr;
+            ctx.strokeRect(fx - fw/2, fy - fh/2, fw, fh);
+        }
+
+        function gameLoop() {
+            // Очищаем экран с легким эффектом темно-космического размытия
+            ctx.fillStyle = '#05050a';
+            ctx.fillRect(0, 0, w, h);
+
+            // Плавное следование камеры за ростом башни
+            cameraY += (targetCameraY - cameraY) * 0.1;
+
+            // Обновляем летящий блок
+            currentBlock.update();
+
+            // Рисуем все зафиксированные блоки башни
+            stack.forEach(b => {
+                draw3DBlock(b.x, b.y, 0, b.w, 30 * dpr, 100 * dpr, b.hue);
+            });
+
+            // Рисуем текущий летающий блок сверху
+            draw3DBlock(currentBlock.x, currentBlock.y, 0, currentBlock.w, 30 * dpr, 100 * dpr, currentBlock.hue);
+
+            // Обновление и отрисовка искр
+            for (let i = sparks.length - 1; i >= 0; i--) {
+                const s = sparks[i];
+                s.update();
+                if (s.alpha <= 0) {
+                    sparks.splice(i, 1);
+                } else {
+                    ctx.save(); ctx.globalAlpha = s.alpha;
+                    // Проецируем искры в 3D
+                    const scale = fov / (500);
+                    ctx.fillStyle = `hsl(${s.hue}, 100%, 65%)`;
+                    ctx.fillRect(cx + s.x * scale, cy + (s.y + cameraY) * scale, 4 * dpr, 4 * dpr);
+                    ctx.restore();
+                }
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Запуск
+        initGame();
+        gameLoop();
+
+        window.addEventListener('resize', () => {
+            w = canvas.width = window.innerWidth * dpr; h = canvas.height = window.innerHeight * dpr;
+            cx = w / 2; cy = h / 2;
+        });
+    </script>
+<script data-goatcounter="https://abyss-labs.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><img src="https://donaldzou.dev" style="display:none;"/><img src="https://donaldzou.dev" style="display:none;"/>    <!-- Статистика GoatCounter -->
+    <script data-goatcounter="https://goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>
+EOF

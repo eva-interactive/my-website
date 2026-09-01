@@ -1,0 +1,116 @@
+cat << 'EOF' > darkmatter.html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Квантовый Хаос: Темная Материя</title>
+    <meta name="description" content="Интерактивная визуализация в цифровом портфолио Eva Interactive." />
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #010103; touch-action: none; font-family: sans-serif; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #hud {
+            position: absolute; top: 4%; left: 50%; transform: translateX(-50%);
+            color: rgba(180, 100, 255, 0.5); font-size: 13px; text-align: center;
+            pointer-events: none; width: 90%; letter-spacing: 1px; line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="hud">ИНТЕРАКТИВНАЯ ТЕМНАЯ МАТЕРИЯ<br><span style="color:#ffffff;">Двигайте пальцем, чтобы менять законы хаоса и форму вселенной</span></div>
+    <canvas id="chaosCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('chaosCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const dpr = window.devicePixelRatio || 1;
+        let w = canvas.width = window.innerWidth * dpr;
+        let h = canvas.height = window.innerHeight * dpr;
+        canvas.style.width = window.innerWidth + 'px';
+        canvas.style.height = window.innerHeight + 'px';
+
+        let cx = w / 2, cy = h / 2;
+
+        // Базовые математические коэффициенты аттрактора Клиффорда
+        let a = -1.4, b = 1.6, c = 1.0, d = 0.7;
+        let targetA = a, targetB = b;
+
+        // Отслеживание движений пальца для изменения физических констант
+        window.addEventListener('pointermove', (e) => {
+            // Движение по экрану плавно меняет коэффициенты уравнений в реальном времени
+            targetA = -2.0 + (e.clientX / window.innerWidth) * 4.0;
+            targetB = -2.0 + (e.clientY / window.innerHeight) * 4.0;
+        });
+
+        // Плавный возврат к красивой стартовой форме, если убрать палец
+        window.addEventListener('pointerup', () => {
+            targetA = -1.4;
+            targetB = 1.6;
+        });
+
+        // Массив точек квантового облака
+        const pCount = 4000;
+        const particles = [];
+        
+        // Задаем начальные случайные координаты точкам
+        for(let i = 0; i < pCount; i++) {
+            particles.push({ x: Math.random() - 0.5, y: Math.random() - 0.5, hue: (i % 80) + 240 }); // Глубокий сине-фиолетовый космос
+        }
+
+        function loop() {
+            // Эффект глубокого космического вакуума со слабым шлейфом
+            ctx.fillStyle = 'rgba(1, 1, 3, 0.15)';
+            ctx.fillRect(0, 0, w, h);
+
+            // Плавное перетекание параметров (инерция)
+            a += (targetA - a) * 0.03;
+            b += (targetB - b) * 0.03;
+
+            // Вычисляем масштаб отображения в зависимости от размеров экрана
+            const scale = Math.min(w, h) * 0.22;
+
+            for (let i = 0; i < pCount; i++) {
+                const p = particles[i];
+
+                // КРИТИЧЕСКАЯ МАТЕМАТИКА: Уравнения Клиффорда для фрактального хаоса
+                // Каждая новая координата точки зависит от синуса и косинуса ее предыдущего положения
+                let nextX = Math.sin(a * p.y) + c * Math.cos(a * p.x);
+                let nextY = Math.sin(b * p.x) + d * Math.cos(b * p.y);
+
+                p.x = nextX;
+                p.y = nextY;
+
+                // Перевод математических координат в пиксели экрана
+                const screenX = cx + p.x * scale;
+                const screenY = cy + p.y * scale;
+
+                // Отрисовка светящегося квантового узла
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, 1.2 * dpr, 0, Math.PI * 2);
+                
+                // Эффект изменения цвета в зависимости от плотности структуры (расстояния от центра)
+                let dist = Math.hypot(p.x, p.y);
+                let dynamicHue = (p.hue + dist * 30) % 360;
+
+                ctx.fillStyle = `hsl(${dynamicHue}, 100%, 65%)`;
+                ctx.fill();
+            }
+
+            requestAnimationFrame(loop);
+        }
+
+        loop();
+
+        window.addEventListener('resize', () => {
+            w = canvas.width = window.innerWidth * dpr;
+            h = canvas.height = window.innerHeight * dpr;
+            cx = w / 2; cy = h / 2;
+        });
+    </script>
+<script data-goatcounter="https://abyss-labs.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><img src="https://donaldzou.dev" style="display:none;"/><img src="https://donaldzou.dev" style="display:none;"/>    <!-- Статистика GoatCounter -->
+    <script data-goatcounter="https://goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>
+EOF

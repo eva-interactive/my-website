@@ -1,0 +1,190 @@
+cat << 'EOF' > run_3d_explosion.sh
+#!/bin/bash
+
+# Создаем HTML-файл с интерактивным 3D взрывом частиц
+cat << 'HTML_EOF' > index_3d_explosion.html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Взрыв частиц в Termux</title>
+    <meta name="description" content="Интерактивная визуализация в цифровом портфолио Eva Interactive." />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #000; user-select: none; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+    </style>
+</head>
+<body>
+<canvas id="canvas3d"></canvas>
+<script>
+const canvas = document.getElementById('canvas3d');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+const points = [];
+const numPoints = 1000; 
+const radius = 160;     
+
+// Генерируем 3D точки
+for (let i = 0; i < numPoints; i++) {
+    let u = Math.random() * Math.PI * 2;
+    let v = Math.acos((Math.random() * 2) - 1);
+    
+    let mod = 1 + 0.2 * Math.sin(5 * u) * Math.cos(5 * v); 
+    
+    // Исходные (целевые) координаты, куда частица захочет вернуться после взрыва
+    let bx = radius * mod * Math.sin(v) * Math.cos(u);
+    let by = radius * mod * Math.sin(v) * Math.sin(u);
+    let bz = radius * mod * Math.cos(v);
+    
+    points.push({
+        x: bx, y: by, z: bz,       // Текущие координаты
+        bx: bx, by: by, bz: bz,    // Базовые координаты орбиты
+        vx: 0, vy: 0, vz: 0,       // Скорости взрыва по трем осям
+        baseColor: Math.floor(u * 60)
+    });
+}
+
+// Переменные вращения
+let angleX = 0.008;
+let angleY = 0.008;
+const angleZ = 0.002;
+
+// Функция обработки взрыва
+function explode(clientX, clientY) {
+    // Переводим 2D координаты клика на экране в виртуальное 3D пространство (центр экрана — это 0,0)
+    let clickX = clientX - canvas.width / 2;
+    let clickY = clientY - canvas.height / 2;
+
+    points.forEach(p => {
+        // Вычисляем расстояние на экране от клика до текущего положения частицы
+        // (Для упрощения считаем взрыв по осям X и Y, но импульс даем в 3D)
+        let dx = p.screenX - clientX;
+        let dy = p.screenY - clientY;
+        let dist = Math.sqrt(dx * dx + dy * dy);
+
+        // Зона поражения взрыва (радиус волны)
+        if (dist < 180) {
+            // Сила импульса: чем ближе к эпицентру, тем сильнее толчок
+            let force = (180 - dist) / 10;
+            
+            // Задаем случайное направление разлета по оси Z, чтобы взрыв казался объемным
+            let zForce = (Math.random() - 0.5) * force * 2;
+
+            p.vx += (dx / (dist || 1)) * force * 1.5;
+            p.vy += (dy / (dist || 1)) * force * 1.5;
+            p.vz += zForce;
+        }
+    });
+}
+
+// Слушатели событий клика и тапа для Android
+window.addEventListener('mousedown', (e) => explode(e.clientX, e.clientY));
+window.addEventListener('touchstart', (e) => {
+    if(e.touches.length > 0) {
+        explode(e.touches[0].clientX, e.touches[0].clientY);
+    }
+});
+
+function animate() {
+    // Шлейф для эффекта искр
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    let cosX = Math.cos(angleX), sinX = Math.sin(angleX);
+    let cosY = Math.cos(angleY), sinY = Math.sin(angleY);
+    let cosZ = Math.cos(angleZ), sinZ = Math.sin(angleZ);
+
+    let projectedPoints = [];
+
+    points.forEach(p => {
+        // Физика: применяем скорость взрыва к координатам
+        p.x += p.vx;
+        p.y += p.vy;
+        p.z += p.vz;
+
+        // Физика: затухание скорости (сопротивление среды)
+        p.vx *= 0.92;
+        p.vy *= 0.92;
+        p.vz *= 0.92;
+
+        // Физика: сила упругости возвращает частицы обратно на круги своя (к bx, by, bz)
+        p.x += (p.bx - p.x) * 0.04;
+        p.y += (p.by - p.y) * 0.04;
+        p.z += (p.bz - p.z) * 0.04;
+
+        // 3D Вращение базовой формы (чтобы сфера продолжала крутиться во время взрыва)
+        let y1 = p.bx * cosX - p.bz * sinX;
+        let z1 = p.bz * cosX + p.bx * sinX;
+        let x2 = p.bx * cosY - z1 * sinY;
+        let z2 = z1 * cosY + p.bx * sinY;
+        let x3 = x2 * cosZ - y1 * sinZ;
+        let y3 = y1 * cosZ + x2 * sinZ;
+        
+        p.bx = x2; p.by = y3; p.bz = z2;
+
+        // Проекция 3D в 2D (Перспектива)
+        let cameraDistance = 400;
+        let fov = 450;
+        let scale = fov / (cameraDistance + p.z);
+
+        // Запоминаем экранные координаты, чтобы точно знать куда кликнул пользователь
+        p.screenX = (canvas.width / 2) + p.x * scale;
+        p.screenY = (canvas.height / 2) + p.y * scale;
+
+        projectedPoints.push({
+            x: p.screenX,
+            y: p.screenY,
+            z: p.z,
+            scale: scale,
+            color: p.baseColor,
+            isExploding: (Math.abs(p.vx) + Math.abs(p.vy) > 1) // Флаг активной фазы взрыва
+        });
+    });
+
+    // Сортировка Z-буфера
+    projectedPoints.sort((a, b) => b.z - a.z);
+
+    // Отрисовка
+    projectedPoints.forEach(p => {
+        let hue = (p.color + Math.floor(p.z * 0.25)) % 360;
+        let alpha = Math.min(1, (p.z + radius) / (radius * 2) + 0.3);
+        let size = Math.max(0.6, p.scale * 1.5);
+
+        // Если частица летит от взрыва, делаем её ярче и крупнее
+        if (p.isExploding) {
+            ctx.fillStyle = `hsla(${(hue + 40) % 360}, 100%, 75%, 1)`; // Смещение цвета к бело-желтому при вспышке
+            size *= 1.8;
+        } else {
+            ctx.fillStyle = `hsla(${hue}, 100%, 60%, ${alpha})`;
+        }
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+<script data-goatcounter="https://abyss-labs.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><img src="https://donaldzou.dev" style="display:none;"/><img src="https://donaldzou.dev" style="display:none;"/>    <!-- Статистика GoatCounter -->
+    <script data-goatcounter="https://goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>
+HTML_EOF
+
+# Запуск в браузере смартфона
+termux-open index_3d_explosion.html
+EOF
+
+bash run_3d_explosion.sh

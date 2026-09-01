@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Ёлка (Рабочая версия)</title>
+    <meta name="description" content="Интерактивная визуализация в цифровом портфолио Eva Interactive." />
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #020208;
+            font-family: sans-serif;
+        }
+        canvas {
+            display: block;
+            touch-action: none;
+        }
+        #info {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            color: #fff;
+            text-shadow: 0 0 8px #00ffff;
+            pointer-events: none;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">🎄 Тапайте игрушки! Растягивайте двумя пальцами для зума! 🎄</div>
+    <canvas id="canvas3d"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas3d');
+        const ctx = canvas.getContext('2d');
+
+        let width, height, treeHeight, scaleFactor;
+        const toys = [];
+        const particles = [];
+        const colors = ['#ff3333', '#ffea00', '#3399ff', '#ff00ff', '#ffffff', '#ff6600', '#00ffff'];
+        let angleY = 0;
+        const FOV = 300;
+
+        // Переменные масштабирования
+        let zoom = 1.0;
+        let initialDistance = 0;
+        let isZooming = false;
+
+        function initDimensions() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            treeHeight = height * 0.85;
+            scaleFactor = height / 800; 
+        }
+
+        window.addEventListener('resize', initDimensions);
+        initDimensions();
+
+        // Генерация ёлки под размеры экрана
+        const layers = 20; 
+        for (let i = 0; i < layers; i++) {
+            const layerY = (treeHeight / 2) - (i * (treeHeight / layers)); 
+            const layerRadius = (layers - i) * (width * 0.022); 
+            const toysInLayer = Math.floor((layers - i) * 2) + 4;
+
+            for (let j = 0; j < toysInLayer; j++) {
+                const angle = (j / toysInLayer) * Math.PI * 2;
+                toys.push({
+                    bx: Math.cos(angle) * layerRadius,
+                    by: layerY,
+                    bz: Math.sin(angle) * layerRadius,
+                    radius: (Math.random() * 4 + 8) * scaleFactor, 
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    popped: false
+                });
+            }
+        }
+
+        // Звезда
+        toys.push({
+            bx: 0, by: (treeHeight / 2) - (layers * (treeHeight / layers)) - (15 * scaleFactor), bz: 0,
+            radius: 22 * scaleFactor,
+            color: '#ffff00',
+            popped: false,
+            isStar: true
+        });
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x; this.y = y; this.color = color;
+                this.vx = (Math.random() - 0.5) * 12;
+                this.vy = (Math.random() - 0.5) * 12;
+                this.alpha = 1;
+                this.radius = (Math.random() * 3 + 1) * scaleFactor * zoom;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.15; 
+                this.alpha -= 0.03;
+            }
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Чистый и безопасный перебор touch-точек без деструктуризации и опасных методов
+        function getTouchDistance(event) {
+            if (!event.touches || event.touches.length < 2) return 0;
+            const t1 = event.touches.item(0);
+            const t2 = event.touches.item(1);
+            if (!t1 || !t2) return 0;
+            const dx = t1.clientX - t2.clientX;
+            const dy = t1.clientY - t2.clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        window.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                isZooming = true;
+                initialDistance = getTouchDistance(e);
+            } else if (e.touches.length === 1 && !isZooming) {
+                const touch = e.touches.item(0);
+                if (touch) {
+                    checkHit(touch.clientX, touch.clientY);
+                }
+            }
+        }, { passive: false });
+
+        window.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2 && isZooming) {
+                e.preventDefault(); 
+                const currentDistance = getTouchDistance(e);
+                
+                if (initialDistance > 0 && currentDistance > 0) {
+                    const factor = currentDistance / initialDistance;
+                    if (!isNaN(factor) && isFinite(factor)) {
+                        zoom *= factor;
+                    }
+                    zoom = Math.max(0.4, Math.min(zoom, 4.0));
+                }
+                initialDistance = currentDistance;
+            }
+        }, { passive: false });
+
+        window.addEventListener('touchend', (e) => {
+            if (e.touches.length < 2) {
+                isZooming = false;
+                initialDistance = 0;
+            }
+        });
+        
+        window.addEventListener('touchcancel', () => {
+            isZooming = false;
+            initialDistance = 0;
+        });
+
+        function checkHit(clientX, clientY) {
+            for (let i = toys.length - 1; i >= 0; i--) {
+                const toy = toys[i];
+                if (toy.popped) continue;
+
+                const dx = clientX - toy.screenX;
+                const dy = clientY - toy.screenY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < toy.renderedRadius + 18) { 
+                    toy.popped = true;
+                    for (let p = 0; p < 25; p++) {
+                        particles.push(new Particle(toy.screenX, toy.screenY, toy.color));
+                    }
+                    break; 
+                }
+            }
+        }
+
+        function animate() {
+            try {
+                ctx.clearRect(0, 0, width, height);
+                
+                const cx = width / 2;
+                const cy = height / 2 + (treeHeight * 0.05); 
+
+                angleY += 0.007; 
+
+                const renderedToys = [];
+
+                toys.forEach(toy => {
+                    if (toy.popped) return;
+
+                    const cosY = Math.cos(angleY);
+                    const sinY = Math.sin(angleY);
+                    
+                    const rx = (toy.bx * cosY - toy.bz * sinY) * zoom;
+                    const rz = ((toy.bx * sinY + toy.bz * cosY) * zoom) + 280; 
+                    const ry = toy.by * zoom;
+
+                    const scale = FOV / (FOV + rz);
+                    const screenX = cx + rx * scale;
+                    const screenY = cy + ry * scale;
+                    const renderedRadius = toy.radius * scale * zoom;
+
+                    toy.screenX = screenX;
+                    toy.screenY = screenY;
+                    toy.renderedRadius = renderedRadius;
+                    toy.depth = rz; 
+
+                    renderedToys.push(toy);
+                });
+
+                renderedToys.sort((a, b) => b.depth - a.depth);
+
+                // Ствол
+                ctx.fillStyle = '#3a221d';
+                ctx.fillRect(
+                    cx - (12 * scaleFactor * zoom), 
+                    cy + ((treeHeight / 2) - 10) * zoom, 
+                    24 * scaleFactor * zoom, 
+                    treeHeight * 0.1 * zoom
+                );
+
+                renderedToys.forEach(toy => {
+                    ctx.shadowBlur = toy.isStar ? 35 : 15;
+                    ctx.shadowColor = toy.color;
+
+                    const gradient = ctx.createRadialGradient(
+                        toy.screenX - toy.renderedRadius * 0.3, 
+                        toy.screenY - toy.renderedRadius * 0.3, 
+                        toy.renderedRadius * 0.1,
+                        toy.screenX, 
+                        toy.screenY, 
+                        toy.renderedRadius
+                    );
+                    gradient.addColorStop(0, '#ffffff');
+                    gradient.addColorStop(0.2, toy.color);
+                    gradient.addColorStop(1, '#000000');
+
+                    ctx.beginPath();
+                    ctx.arc(toy.screenX, toy.screenY, toy.renderedRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = gradient;
+                    ctx.fill();
+                });
+
+                ctx.shadowBlur = 0;
+
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    const p = particles[i];
+                    p.update();
+                    p.draw();
+                    if (p.alpha <= 0) particles.splice(i, 1);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+<script data-goatcounter="https://abyss-labs.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><img src="https://donaldzou.dev" style="display:none;"/><img src="https://donaldzou.dev" style="display:none;"/>    <!-- Статистика GoatCounter -->
+    <script data-goatcounter="https://goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>

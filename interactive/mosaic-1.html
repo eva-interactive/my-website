@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Мозаика из Кубиков</title>
+    <meta name="description" content="Интерактивная визуализация в цифровом портфолио Eva Interactive." />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050505;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="mosaicCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('mosaicCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Адаптация размера под экран телефона
+        function resize() {
+            canvas.width = window.innerWidth * window.devicePixelRatio;
+            canvas.height = window.innerHeight * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Параметры сетки кубиков
+        const COLS = 6; 
+        const ROWS = 8;
+        const cubes = [];
+
+        // Базовые 3D вершины куба (центрированные относительно 0,0,0)
+        const vertices = [
+            [-0.5, -0.5, -0.5], [0.5, -0.5, -0.5], [0.5, 0.5, -0.5], [-0.5, 0.5, -0.5],
+            [-0.5, -0.5, 0.5],  [0.5, -0.5, 0.5],  [0.5, 0.5, 0.5],  [-0.5, 0.5, 0.5]
+        ];
+
+        // Грани куба (индексы вершин) и их цвета
+        const faces = [
+            { indices: [0, 1, 2, 3], color: '#FF3366' }, // Задняя
+            { indices: [1, 5, 6, 2], color: '#33FF66' }, // Правая
+            { indices: [4, 5, 6, 7], color: '#3366FF' }, // Передняя
+            { indices: [0, 4, 7, 3], color: '#FFCC00' }, // Левая
+            { indices: [0, 1, 5, 4], color: '#9933FF' }, // Верхняя
+            { indices: [2, 3, 7, 6], color: '#00FFFF' }  // Нижняя
+        ];
+
+        // Инициализация мозаики
+        const cellWidth = window.innerWidth / COLS;
+        const cellHeight = window.innerHeight / ROWS;
+        const cubeSize = Math.min(cellWidth, cellHeight) * 0.6; // Размер куба
+
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                cubes.push({
+                    // Позиция центра ячейки на экране
+                    x: c * cellWidth + cellWidth / 2,
+                    y: r * cellHeight + cellHeight / 2,
+                    // Углы поворота
+                    rx: Math.random() * Math.PI,
+                    ry: Math.random() * Math.PI,
+                    rz: Math.random() * Math.PI,
+                    // Скорость базового вращения
+                    speedX: 0.01 + Math.random() * 0.02,
+                    speedY: 0.01 + Math.random() * 0.02,
+                    // Импульс от прикосновения
+                    impulseX: 0,
+                    impulseY: 0
+                });
+            }
+        }
+
+        // Функция 3D поворота и проекции
+        function project(x, y, z, rx, ry, rz, size, cx, cy) {
+            // Поворот по X
+            let r1x = x, r1y = y * Math.cos(rx) - z * Math.sin(rx), r1z = y * Math.sin(rx) + z * Math.cos(rx);
+            // Поворот по Y
+            let r2x = r1x * Math.cos(ry) + r1z * Math.sin(ry), r2y = r1y, r2z = -r1x * Math.sin(ry) + r1z * Math.cos(ry);
+            // Поворот по Z
+            let r3x = r2x * Math.cos(rz) - r2y * Math.sin(rz), r3y = r2x * Math.sin(rz) + r2y * Math.cos(rz), r3z = r2z;
+
+            // Простая изометрическая/ортогональная проекция с масштабированием
+            return {
+                x: r3x * size + cx,
+                y: r3y * size + cy,
+                z: r3z // Используется для сортировки граней по глубине
+            };
+        }
+
+        // Обработка тач-событий (пальца)
+        function handleTouch(e) {
+            e.preventDefault(); // Предотвращаем скролл экрана
+            const touches = e.touches;
+
+            for (let i = 0; i < touches.length; i++) {
+                const touchX = touches[i].clientX;
+                const touchY = touches[i].clientY;
+
+                // Проверяем, какой кубик находится рядом с пальцем
+                cubes.forEach(cube => {
+                    const dist = Math.hypot(cube.x - touchX, cube.y - touchY);
+                    if (dist < cubeSize * 1.5) {
+                        // Добавляем сильный крутящий момент при приближении пальца
+                        cube.impulseX = 0.3;
+                        cube.impulseY = 0.3;
+                    }
+                });
+            }
+        }
+
+        canvas.addEventListener('touchstart', handleTouch, { passive: false });
+        canvas.addEventListener('touchmove', handleTouch, { passive: false });
+
+        // Основной цикл анимации
+        function animate() {
+            ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+            cubes.forEach(cube => {
+                // Обновляем углы: базовая скорость + затухающий импульс от тача
+                cube.rx += cube.speedX + cube.impulseX;
+                cube.ry += cube.speedY + cube.impulseY;
+                
+                cube.impulseX *= 0.95; // Постепенное замедление импульса
+                cube.impulseY *= 0.95;
+
+                // Проецируем все 8 вершин куба
+                const projectedVertices = vertices.map(v => 
+                    project(v[0], v[1], v[2], cube.rx, cube.ry, cube.rz, cubeSize, cube.x, cube.y)
+                );
+
+                // Вычисляем среднюю глубину (Z) для каждой грани (алгоритм художника)
+                const renderedFaces = faces.map(face => {
+                    const avgZ = face.indices.reduce((sum, idx) => sum + projectedVertices[idx].z, 0) / 4;
+                    return { face, avgZ };
+                });
+
+                // Сортируем грани, чтобы сначала рисовать дальние, а потом ближние
+                renderedFaces.sort((a, b) => b.avgZ - a.avgZ);
+
+                // Отрисовка отсортированных граней
+                renderedFaces.forEach(({ face }) => {
+                    ctx.beginPath();
+                    const p0 = projectedVertices[face.indices[0]];
+                    ctx.moveTo(p0.x, p0.y);
+
+                    for (let i = 1; i < 4; i++) {
+                        const p = projectedVertices[face.indices[i]];
+                        ctx.lineTo(p.x, p.y);
+                    }
+                    ctx.closePath();
+
+                    // Стилизация: цвет + обводка для эффекта мозаики
+                    ctx.fillStyle = face.color;
+                    ctx.fill();
+                    ctx.strokeStyle = '#050505';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                });
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+<script data-goatcounter="https://abyss-labs.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script><img src="https://donaldzou.dev" style="display:none;"/><img src="https://donaldzou.dev" style="display:none;"/>    <!-- Статистика GoatCounter -->
+    <script data-goatcounter="https://goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>
