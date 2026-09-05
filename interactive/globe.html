@@ -12,6 +12,17 @@ cat << 'EOF' > globe.html
         #info { position: absolute; top: 4%; left: 50%; transform: translateX(-50%); color: rgba(0, 240, 255, 0.4); font-size: 13px; pointer-events: none; text-align: center; width: 90%; letter-spacing: 1px; }
     </style>
 </head>
+    <!-- Yandex.Metrika counter -->
+    <script type="text/javascript" >
+       (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+       m[i].l=1*new Date();
+       for (var j = 0; j < e.length; j++) {if (e[j].r===r) { return; }}
+       k=e.createElement(t),a=e.getElementsByTagName(t),k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})
+       (window, document, "script", "https://yandex.ru", "ym");
+       ym(112304908, "init", { clickmap:true, trackLinks:true, accurateTrackBounce:true, webvisor:true });
+    </script>
+    <noscript><div><img src="https://yandex.ru" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+    <!-- /Yandex.Metrika counter -->
 <body>
     <div id="info">Один палец — вращение планеты. Два пальца — изменение размера!</div>
     <canvas id="globeCanvas"></canvas>
