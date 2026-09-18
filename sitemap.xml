@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://sitemaps.org">
+    <!-- Главная страница -->
+    <url>
+        <loc>https://github.io</loc>
+        <priority>1.00</priority>
+    </url>
+    <url>
+        <loc>https://github.ioindex.html</loc>
+        <priority>0.80</priority>
+    </url>
+
+    <!-- Интерактивные проекты -->
+    <url><loc>https://github.iointeractive/fireworks.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/mosaic-1.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/fractal.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/fractal-1.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/mosaic-2.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/hyperbloom.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/black-hole.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/game.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/dark-matter.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/spiral.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/life.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/holographic-clock.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/heart.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/globe.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/explosion.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/christmas-tree.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/chaos.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/rubiks-cube.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/kaleidoscope.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/abyss-eye.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/fireflies.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/plasma.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/gravity.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/galaxy.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/galaxy-merge.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/fire.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/parade-of-planets.html</loc><priority>0.70</priority></url>
+    <url><loc>https://github.iointeractive/tempest.html</loc><priority>0.70</priority></url>
+</urlset>

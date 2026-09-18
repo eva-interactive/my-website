@@ -1,2 +1,9 @@
 User-agent: *
-Disallow:
+Allow: /$
+Allow: /index.html
+Allow: /interactive/
+Disallow: /.*
+Disallow: /readme.md
+Disallow: /README.md
+
+Sitemap: https://github.io/eva-interactive/my-website
