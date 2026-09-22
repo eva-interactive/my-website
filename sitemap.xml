@@ -2,41 +2,37 @@
 <urlset xmlns="http://sitemaps.org">
     <!-- Главная страница -->
     <url>
-        <loc>https://pages.dev</loc>
+        <loc>https://netlify.app</loc>
         <priority>1.00</priority>
-    </url>
-    <url>
-        <loc>https://pages.devindex.html</loc>
-        <priority>0.80</priority>
     </url>
 
     <!-- Интерактивные проекты -->
-    <url><loc>https://pages.devinteractive/fireworks.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/mosaic-1.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/fractal.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/fractal-1.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/mosaic-2.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/hyperbloom.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/black-hole.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/game.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/dark-matter.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/spiral.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/life.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/holographic-clock.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/heart.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/globe.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/explosion.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/christmas-tree.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/chaos.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/rubiks-cube.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/kaleidoscope.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/abyss-eye.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/fireflies.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/plasma.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/gravity.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/galaxy.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/galaxy-merge.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/fire.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/parade-of-planets.html</loc><priority>0.70</priority></url>
-    <url><loc>https://pages.devinteractive/tempest.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/fireworks.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/mosaic-1.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/fractal.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/fractal-1.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/mosaic-2.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/hyperbloom.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/black-hole.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/game.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/dark-matter.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/spiral.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/life.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/holographic-clock.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/heart.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/globe.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/explosion.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/christmas-tree.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/chaos.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/rubiks-cube.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/kaleidoscope.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/abyss-eye.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/fireflies.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/plasma.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/gravity.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/galaxy.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/galaxy-merge.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/fire.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/parade-of-planets.html</loc><priority>0.70</priority></url>
+    <url><loc>https://netlify.appinteractive/tempest.html</loc><priority>0.70</priority></url>
 </urlset>
