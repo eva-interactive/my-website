@@ -3,4 +3,4 @@ Allow: /
 Disallow: /readme.md
 Disallow: /README.md
 
-Sitemap: https://eva-interactive.netlify.app
+Sitemap: https://eva-interactive.netlify.app/sitemap.xml
