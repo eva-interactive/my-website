@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Аттрактор Лоренца: Метеорный Поток</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #030306;
+            height: 100%;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const dpr = window.devicePixelRatio || 1;
+    let w, h;
+
+    // Списки космических объектов
+    const backgroundStars = [];
+    const meteors = [];
+
+    function resize() {
+        w = canvas.width = window.innerWidth * dpr;
+        h = canvas.height = window.innerHeight * dpr;
+        canvas.style.width = window.innerWidth + 'px';
+        canvas.style.height = window.innerHeight + 'px';
+        
+        // Фоновые звезды
+        backgroundStars.length = 0;
+        for (let i = 0; i < 120; i++) {
+            backgroundStars.push({
+                x: Math.random() * w,
+                y: Math.random() * h,
+                size: (Math.random() * 1.0 + 0.3) * dpr,
+                twinkleSpeed: Math.random() * 0.04 + 0.01,
+                phase: Math.random() * Math.PI * 2,
+                parallax: Math.random() * 12 + 4 
+            });
+        }
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Параметры комет (падающих звезд)
+    function createMeteor() {
+        // Кометы летят по диагонали сверху-справа налево-вниз
+        return {
+            x: Math.random() * w * 1.5 - w * 0.2,
+            y: -50 * dpr,
+            length: (Math.random() * 80 + 40) * dpr,
+            speed: (Math.random() * 12 + 8) * dpr,
+            angle: Math.PI * 0.75 + (Math.random() * 0.1 - 0.05), // Наклон падения
+            opacity: Math.random() * 0.6 + 0.4,
+            width: (Math.random() * 1.2 + 0.5) * dpr
+        };
+    }
+
+    // Математика Лоренца
+    const sigma = 10;
+    const rho = 28;
+    const beta = 8/3;
+    let x = 0.1, y = 0, z = 0;
+    let dt = 0.005; 
+
+    const points = [];
+    const maxPoints = 4000; 
+
+    // Управление и углы камеры
+    let angleX = 0.5;
+    let angleY = 0.5;
+    let targetAngleX = 0.5;
+    let targetAngleY = 0.5;
+    let isTouching = false;
+    let lastTouchX = 0;
+    let lastTouchY = 0;
+    let corePulse = 0; // Для анимации пульсации ядра
+
+    // Обработка касаний на планшете
+    canvas.addEventListener('touchstart', (e) => {
+        isTouching = true;
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+    });
+
+    canvas.addEventListener('touchmove', (e) => {
+        if (!isTouching) return;
+        const deltaX = e.touches[0].clientX - lastTouchX;
+        const deltaY = e.touches[0].clientY - lastTouchY;
+        
+        targetAngleY += deltaX * 0.005;
+        targetAngleX += deltaY * 0.005;
+        
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+    });
+
+    canvas.addEventListener('touchend', () => {
+        isTouching = false;
+    });
+
+    function animate() {
+        // Очистка со шлейфом для эффекта проявления и следов от комет
+        ctx.fillStyle = 'rgba(3, 3, 6, 0.08)';
+        ctx.fillRect(0, 0, w, h);
+
+        // Константы проекции
+        const scale = Math.min(w, h) * 0.015; 
+        const cx = w / 2;
+        const cy = h / 2 + (50 * dpr);
+
+        // Плавное следование камеры за углами
+        angleX += (targetAngleX - angleX) * 0.05;
+        angleY += (targetAngleY - angleY) * 0.05;
+
+        // --- 1. ЗАДНИЙ ФОН: ГАЛАКТИКА И ЗВЕЗДЫ ---
+        const bgGrad = ctx.createRadialGradient(cx, cy, 10, cx, cy, Math.max(w, h) * 0.6);
+        bgGrad.addColorStop(0, 'rgba(20, 12, 40, 0.18)');
+        bgGrad.addColorStop(0.6, 'rgba(5, 10, 25, 0.06)');
+        bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        // Прорисовка мерцающих звезд
+        for (let i = 0; i < backgroundStars.length; i++) {
+            const star = backgroundStars[i];
+            star.phase += star.twinkleSpeed;
+            const offsetX = (angleY - 0.5) * star.parallax * dpr;
+            const offsetY = (angleX - 0.5) * star.parallax * dpr;
+            const alpha = 0.2 + Math.abs(Math.sin(star.phase)) * 0.8;
+
+            ctx.beginPath();
+            ctx.arc(star.x + offsetX, star.y + offsetY, star.size, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(230, 240, 255, ${alpha})`;
+            ctx.fill();
+        }
+
+        // --- 2. МЕТЕОРНЫЙ ПОТОК (ПАДАЮЩИЕ ЗВЕЗДЫ) ---
+        if (Math.random() < 0.02 && meteors.length < 4) {
+            meteors.push(createMeteor());
+        }
+
+        for (let i = meteors.length - 1; i >= 0; i--) {
+            const m = meteors[i];
+            m.x += Math.cos(m.angle) * m.speed;
+            m.y += Math.sin(m.angle) * m.speed;
+
+            const meteorGrad = ctx.createLinearGradient(
+                m.x, m.y, 
+                m.x - Math.cos(m.angle) * m.length, 
+                m.y - Math.sin(m.angle) * m.length
+            );
+            meteorGrad.addColorStop(0, `rgba(255, 255, 255, ${m.opacity})`);
+            meteorGrad.addColorStop(0.3, `rgba(140, 200, 255, ${m.opacity * 0.6})`);
+            meteorGrad.addColorStop(1, 'rgba(100, 50, 200, 0)');
+
+            ctx.beginPath();
+            ctx.moveTo(m.x, m.y);
+            ctx.lineTo(m.x - Math.cos(m.angle) * m.length, m.y - Math.sin(m.angle) * m.length);
+            ctx.strokeStyle = meteorGrad;
+            ctx.lineWidth = m.width;
+            ctx.stroke();
+
+            if (m.y > h + m.length || m.x < -m.length) {
+                meteors.splice(i, 1);
+            }
+        }
+
+        // --- 3. МАТЕМАТИКА И ЛИНИЯ АТТРАКТОРА ---
+        let dx = (sigma * (y - x)) * dt;
+        let dy = (x * (rho - z) - y) * dt;
+        let dz = (x * y - beta * z) * dt;
+        x += dx; y += dy; z += dz;
+
+        points.push({x, y, z});
+        if (points.length > maxPoints) points.shift();
+
+        const cosX = Math.cos(angleX), sinX = Math.sin(angleX);
+        const cosY = Math.cos(angleY), sinY = Math.sin(angleY);
+
+        if (points.length > 1) {
+            ctx.lineWidth = 1.8 * dpr;
+            ctx.lineJoin = 'round'; 
+            ctx.lineCap = 'round';
+            
+            for (let i = 1; i < points.length; i++) {
+                let p1 = points[i - 1];
+                let p2 = points[i];
+
+                // Корректное 3D вращение для первой точки (p1)
+                let x1_rotY = p1.x * cosY - p1.z * sinY;
+                let z1_rotY = p1.x * sinY + p1.z * cosY;
+                let y1_final = p1.y * cosX - z1_rotY * sinX;
+
+                // Корректное 3D вращение для второй точки (p2)
+                let x2_rotY = p2.x * cosY - p2.z * sinY;
+                let z2_rotY = p2.x * sinY + p2.z * cosY;
+                let y2_final = p2.y * cosX - z2_rotY * sinX;
+
+                // Проекция на 2D экран
+                const screenX1 = cx + x1_rotY * scale; 
+                const screenY1 = cy - y1_final * scale;
+                const screenX2 = cx + x2_rotY * scale; 
+                const screenY2 = cy - y2_final * scale;
+
+                const hue = (p2.z * 2.8 + 165) % 360;
+                const alpha = i / points.length; 
+
+                ctx.beginPath();
+                ctx.moveTo(screenX1, screenY1);
+                ctx.lineTo(screenX2, screenY2);
+                ctx.strokeStyle = `hsla(${hue}, 95%, 60%, ${alpha})`;
+                ctx.stroke();
+            }
+        }
+
+        // --- 4. ПУЛЬСИРУЮЩЕЕ ЯДРО ХАОСА ---
+        corePulse += 0.04; 
+        const pulseRadius = (45 + Math.sin(corePulse) * 8) * dpr;
+
+        const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, pulseRadius);
+        coreGrad.addColorStop(0, 'rgba(255, 60, 180, 0.35)');
+        coreGrad.addColorStop(0.3, 'rgba(130, 50, 255, 0.15)');
+        coreGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        
+        ctx.fillStyle = coreGrad;
+        ctx.globalCompositeOperation = 'screen';
+        ctx.beginPath();
+        ctx.arc(cx, cy, pulseRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalCompositeOperation = 'source-over'; 
+
+        requestAnimationFrame(animate);
+    }
+
+    animate();
+</script>
+</body>
+</html>
