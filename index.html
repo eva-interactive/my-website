@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Eva Interactive: коллекция интерактивных визуализаций и цифрового арта." />
-    
+
     <!-- Open Graph теги для красивого отображения сайта при репостах в Telegram/VK -->
     <meta property="og:title" content="Eva Interactive — Портфолио" />
     <meta property="og:description" content="Коллекция интерактивных визуализаций и цифрового арта." />
@@ -21,7 +21,7 @@
           if (e[j].src === r) { return; }
         }
         k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
-      })(window, document, "script", "https://mc.yandex.ru/metrika/tag.js", "ym");
+      })(window, document, "script", "https://yandex.ru", "ym");
 
       ym(112304908, "init", {
         clickmap: true,
@@ -31,13 +31,12 @@
       });
     </script>
     <noscript>
-      <div><img src="https://mc.yandex.ru/watch/112304908" style="position:absolute; left:-9999px;" alt="" /></div>
+      <div><img src="https://yandex.ru" style="position:absolute; left:-9999px;" alt="" /></div>
     </noscript>
 
-    <!-- GoatCounter (ВНИМАНИЕ: Замените "interactive-analytics" на ваш точный поддомен, если он другой) -->
-    <script data-goatcounter="https://interactive-analytics.goatcounter.com"
-        async src="https://zgo.at"></script>
-
+    <!-- Исправленный счетчик GoatCounter -->
+     <script data-goatcounter="https://interactive-analytics.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
     <style>
         body {
             margin: 0; padding: 0;
@@ -85,9 +84,19 @@
             transform: scale(1.05);
             background: linear-gradient(45deg, #ff315c, #ff3b1b);
         }
+        /* Особый стиль для золотой юбилейной кнопки */
+        .btn-gold {
+            background: linear-gradient(45deg, #ffe259, #ffa751);
+            color: #111;
+            box-shadow: 0 5px 15px rgba(255, 167, 81, 0.5);
+            font-weight: 900;
+        }
+        .btn-gold:hover, .btn-gold:active {
+            background: linear-gradient(45deg, #ffd700, #ff9f43);
+        }
     </style>
 </head>
-<body ontouchstart=""> <!-- ontouchstart исправляет отклик кнопок на тач-экранах планшетов -->
+<body ontouchstart="">
 
     <div class="container">
         <h1>Eva Interactive</h1>
@@ -123,8 +132,7 @@
             <a href="interactive/parade-of-planets.html" class="btn" data-goatcounter-click="click-parade-of-planets">Парад Планет</a>
             <a href="interactive/tempest.html" class="btn" data-goatcounter-click="click-tempest">Природа: буря</a>
             <a href="interactive/lorenz.html" class="btn" data-goatcounter-click="click-lorenz">Аттрактор Лоренца</a>
-            <a href="interactive/jubilee-30.html" class="btn" data-goatcounter-click="click-jubilee-30" style="background: linear-gradient(45deg, #gold, #ffd700); color: #000; box-shadow: 0 5px 15px rgba(255, 215, 0, 0.4);">★ Юбилей 30 ★</a>
-
+            <a href="interactive/jubilee-30.html" class="btn btn-gold" data-goatcounter-click="click-jubilee-30">★ Юбилей 30 ★</a>
         </div>
     </div>
 
@@ -133,12 +141,12 @@
             document.querySelectorAll('.btn').forEach(button => {
                 button.addEventListener('click', (jsEvent) => {
                     const eventName = button.getAttribute('data-goatcounter-click');
-                    
+
                     // 1. Отправка события в Яндекс Метрику
                     if (eventName && typeof ym !== 'undefined') {
                         ym(112304908, 'reachGoal', eventName);
                     }
-                    
+
                     // 2. Отправка события в GoatCounter
                     if (eventName && window.goatcounter && window.goatcounter.count) {
                         window.goatcounter.count({
