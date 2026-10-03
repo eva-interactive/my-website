@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber Jubilee 30 — Eva Interactive</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body, html {
+            width: 100%; height: 100%;
+            overflow: hidden;
+            background-color: #050811;
+            font-family: sans-serif;
+        }
+        canvas {
+            display: block;
+            width: 100vw; height: 100vh;
+        }
+        .back-btn {
+            position: absolute;
+            top: 20px; left: 20px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.07);
+            color: #fff;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 15px rgba(255,255,255,0.2);
+        }
+        .hint {
+            position: absolute;
+            bottom: 20px; left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 12px;
+            letter-spacing: 1px;
+            pointer-events: none;
+            text-align: center;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <a href="../index.html" class="back-btn">← Назад в портфолио</a>
+    <div class="hint">Двигайте мышью, чтобы разогнать частицы • Кликайте для взрыва и смены цвета</div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+
+        const particles = [];
+        const particleCount = 28000; 
+        let targetPoints = [];
+
+        const backgroundStars = [];
+        const starCount = 120; 
+
+        const mouse = { x: -1000, y: -1000, radius: 90, active: false };
+
+        const palletes = [
+            { r: 255, g: 215, b: 0 },   // Золотой юбилейный
+            { r: 0, g: 242, b: 254 },  // Кибер-неон
+            { r: 255, g: 0, b: 128 },  // Пурпурный
+            { r: 57, g: 255, b: 20 }   // Зеленый
+        ];
+        let currentPaletteIndex = 0;
+
+        class BackgroundStar {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.size = Math.random() * 1.5 + 0.3;
+                this.speed = Math.random() * 0.15 + 0.05;
+                this.alpha = Math.random() * 0.6 + 0.2;
+                this.blinkSpeed = Math.random() * 0.01 + 0.005;
+            }
+
+            update() {
+                this.y += this.speed;
+                this.alpha += this.blinkSpeed;
+                
+                if (this.alpha > 0.8 || this.alpha < 0.2) {
+                    this.blinkSpeed = -this.blinkSpeed;
+                }
+
+                if (this.y > height) {
+                    this.y = 0;
+                    this.x = Math.random() * width;
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.alpha})`;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+            }
+        }
+
+        function generateTargetPoints() {
+            const memCanvas = document.createElement('canvas');
+            const memCtx = memCanvas.getContext('2d');
+            memCanvas.width = width;
+            memCanvas.height = height;
+
+            const fontSize = Math.min(width * 0.35, height * 0.6);
+            memCtx.fillStyle = '#000';
+            memCtx.font = `900 ${fontSize}px sans-serif`;
+            memCtx.textAlign = 'center';
+            memCtx.textBaseline = 'middle';
+            memCtx.fillText('30', width / 2, height / 2);
+
+            const imgData = memCtx.getImageData(0, 0, width, height).data;
+            targetPoints = [];
+
+            const step = Math.max(1, Math.floor(Math.sqrt((width * height) / particleCount) * 0.9));
+            for (let y = 0; y < height; y += step) {
+                for (let x = 0; x < width; x += step) {
+                    const index = (y * width + x) * 4;
+                    if (imgData[index + 3] > 128) {
+                        targetPoints.push({ x: x, y: y });
+                    }
+                }
+            }
+        }
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.originalX = this.x;
+                this.originalY = this.y;
+                this.vx = 0;
+                this.vy = 0;
+                this.size = Math.random() * 1.5 + 0.5;
+                this.speedFactor = Math.random() * 0.04 + 0.02;
+                this.friction = Math.random() * 0.15 + 0.8;
+            }
+
+            setTarget(tx, ty) {
+                this.originalX = tx + (Math.random() * 6 - 3);
+                this.originalY = ty + (Math.random() * 6 - 3);
+            }
+
+            update() {
+                let dx = this.originalX - this.x;
+                let dy = this.originalY - this.y;
+                
+                this.vx += dx * this.speedFactor;
+                this.vy += dy * this.speedFactor;
+
+                if (mouse.active) {
+                    let mdx = this.x - mouse.x;
+                    let mdy = this.y - mouse.y;
+                    let distance = Math.sqrt(mdx * mdx + mdy * mdy);
+                    
+                    if (distance < mouse.radius) {
+                        let force = (mouse.radius - distance) / mouse.radius;
+                        let angle = Math.atan2(mdy, mdx) + 0.5; 
+                        this.vx += Math.cos(angle) * force * 12;
+                        this.vy += Math.sin(angle) * force * 12;
+                    }
+                }
+
+                this.vx *= this.friction;
+                this.vy *= this.friction;
+                this.x += this.vx;
+                this.y += this.vy;
+            }
+
+            draw() {
+                const p = palletes[currentPaletteIndex];
+                const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                const alpha = Math.min(1, 0.4 + speed * 0.1);
+                
+                ctx.fillStyle = `rgba(${p.r}, ${p.g}, ${p.b}, ${alpha})`;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+            }
+        }
+
+        function init() {
+            generateTargetPoints();
+            
+            particles.length = 0;
+            for (let i = 0; i < targetPoints.length; i++) {
+                const p = new Particle();
+                p.setTarget(targetPoints[i].x, targetPoints[i].y);
+                particles.push(p);
+            }
+            
+            while(particles.length < particleCount / 2) {
+                const randTarget = targetPoints[Math.floor(Math.random() * targetPoints.length)];
+                if(!randTarget) break;
+                const p = new Particle();
+                p.setTarget(randTarget.x, randTarget.y);
+                particles.push(p);
+            }
+
+            backgroundStars.length = 0;
+            for (let i = 0; i < starCount; i++) {
+                backgroundStars.push(new BackgroundStar());
+            }
+        }
+
+        function animate() {
+            ctx.fillStyle = 'rgba(10, 13, 34, 0.2)'; 
+            ctx.fillRect(0, 0, width, height);
+
+            for (let i = 0; i < backgroundStars.length; i++) {
+                backgroundStars[i].update();
+                backgroundStars[i].draw();
+            }
+
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update();
+                particles[i].draw();
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+            mouse.active = true;
+        });
+
+        window.addEventListener('mouseleave', () => {
+            mouse.active = false;
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            mouse.x = e.touches.clientX;
+            mouse.y = e.touches.clientY;
+            mouse.active = true;
+        });
+
+        window.addEventListener('touchend', () => {
+            mouse.active = false;
+        });
+
+        window.addEventListener('click', () => {
+            currentPaletteIndex = (currentPaletteIndex + 1) % palletes.length;
+            
+            particles.forEach(p => {
+                const angle = Math.random() * Math.PI * 2;
+                const force = Math.random() * 20 + 8;
+                p.vx += Math.cos(angle) * force;
+                p.vy += Math.sin(angle) * force;
+            });
+        });
+
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            init();
+        });
+
+        init();
+        animate();
+    </script>
+</body>
+</html>
