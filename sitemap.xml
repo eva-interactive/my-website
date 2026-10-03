@@ -2,7 +2,7 @@
 <urlset xmlns="http://sitemaps.org">
     <!-- Главная страница -->
     <url>
-        <loc>https://eva-interactive.netlify.app</loc>
+        <loc>https://eva-interactive.netlify.app/</loc>
         <priority>1.00</priority>
     </url>
 
@@ -34,6 +34,7 @@
     <url><loc>https://eva-interactive.netlify.app/interactive/galaxy-merge.html</loc><priority>0.70</priority></url>
     <url><loc>https://eva-interactive.netlify.app/interactive/fire.html</loc><priority>0.70</priority></url>
     <url><loc>https://eva-interactive.netlify.app/interactive/parade-of-planets.html</loc><priority>0.70</priority></url>
-    <url><loc>https://eva-interactive.netlify.app/interactive/tempest.html</loc><priority>0.70</priority></url></tempest.html</loc><priority>0.70</priority></url>
-    <url><loc>https://eva-interactive.netlify.app/interactive/lorenz.html</loc><priority>0.70</priority></url></lorenz.html</loc><priority>0.70</priority></url>
+    <url><loc>https://eva-interactive.netlify.app/interactive/tempest.html</loc><priority>0.70</priority></url>
+    <url><loc>https://eva-interactive.netlify.app/interactive/lorenz.html</loc><priority>0.70</priority></url>
+    <url><loc>https://eva-interactive.netlify.app/interactive/jubilee-30.html</loc><priority>0.70</priority></url>
 </urlset>
