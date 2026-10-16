@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Бильярд 3D — Шаг 5</title>
+    <style>body,html{margin:0;padding:0;overflow:hidden;background-color:#0b0b12;height:100%}canvas{display:block;width:100vw;height:100vh}</style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+<script>
+    const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d'), dpr = window.devicePixelRatio || 1;
+    let w, h, cx, cy;
+    const tableW = 380, tableH = 440, borderThick = 18, ballR = 12, friction = 0.990, pocketR = 21, balls = [];
+    const pk = [{x:-tableW/2,y:-tableH/2},{x:tableW/2,y:-tableH/2},{x:-tableW/2-4,y:0},{x:tableW/2+4,y:0},{x:-tableW/2,y:tableH/2},{x:tableW/2,y:tableH/2}];
+
+    let cueBall = null, isAiming = false, aimAngle = 0;
+
+    function initGame() {
+        balls.length = 0;
+        cueBall = { x: 0, y: 120, vx: 0, vy: 0, in: false, isCue: true, color: '#f8fafc', num: 0 };
+        balls.push(cueBall);
+        let startY = -120, count = 1;
+        for (let r = 0; r < 5; r++) {
+            let rY = startY - r * (ballR * 1.75), rStartX = -r * ballR;
+            for (let c = 0; r >= c; c++) {
+                let rX = rStartX + c * (ballR * 2.05), ballColor = (count % 2 === 0) ? '#dc2626' : '#f59e0b';
+                balls.push({ x: rX, y: rY, vx: 0, vy: 0, in: false, isCue: false, color: ballColor, num: count });
+                count++;
+            }
+        }
+    }
+
+    function resize() {
+        w = canvas.width = window.innerWidth * dpr; h = canvas.height = window.innerHeight * dpr;
+        cx = w / 2; cy = h / 2 + 60 * dpr; initGame();
+    }
+    window.addEventListener('resize', resize); resize();
+
+    function onTouchStart(e) {
+        e.preventDefault();
+        let cx = e.touches ? e.touches[0].clientX : e.clientX;
+        let cy = e.touches ? e.touches[0].clientY : e.clientY;
+        if (cueBall.in) { initGame(); return; }
+        let active = balls.filter(b => !b.in && (Math.abs(b.vx) > 0.05 || Math.abs(b.vy) > 0.05));
+        if (active.length > 0) return;
+        isAiming = true; updateAimAngle(cx, cy);
+    }
+    function onTouchMove(e) {
+        if (!isAiming) return;
+        let cx = e.touches ? e.touches[0].clientX : e.clientX;
+        let cy = e.touches ? e.touches[0].clientY : e.clientY;
+        updateAimAngle(cx, cy);
+    }
+    function onTouchEnd() {
+        if (!isAiming) return; isAiming = false;
+        cueBall.vx = Math.cos(aimAngle) * 6.0; cueBall.vy = Math.sin(aimAngle) * 6.0;
+    }
+    function updateAimAngle(clientX, clientY) {
+        let bPt = project(cueBall.x, cueBall.y);
+        aimAngle = Math.atan2(clientY - bPt.y/dpr, clientX - bPt.x/dpr);
+    }
+
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd);
+    canvas.addEventListener('mousedown', onTouchStart);
+    canvas.addEventListener('mousemove', onTouchMove);
+    canvas.addEventListener('mouseup', onTouchEnd);
+
+    function updatePhysics() {
+        balls.forEach(b => {
+            if (!b.in) {
+                b.x += b.vx; b.y += b.vy; b.vx *= friction; b.vy *= friction;
+                if (Math.abs(b.vx) < 0.015) b.vx = 0; if (Math.abs(b.vy) < 0.015) b.vy = 0;
+                pk.forEach(p => { if (Math.sqrt((b.x-p.x)**2 + (b.y-p.y)**2) < pocketR - 2) b.in = true; });
+            }
+        });
+        balls.forEach(b => {
+            if (!b.in) {
+                let lx = tableW / 2 - ballR, ly = tableH / 2 - ballR;
+                if (b.x < -lx) { b.x = -lx; b.vx = -b.vx * 0.85; } if (b.x > lx)  { b.x = lx;  b.vx = -b.vx * 0.85; }
+                if (b.y < -ly) { b.y = -ly; b.vy = -b.vy * 0.85; } if (b.y > ly)  { b.y = ly;  b.vy = -b.vy * 0.85; }
+            }
+        });
+        for (let i = 0; i < balls.length; i++) {
+            for (let j = i + 1; j < balls.length; j++) {
+                let b1 = balls[i], b2 = balls[j];
+                if (!b1.in && !b2.in) {
+                    let dx = b2.x - b1.x, dy = b2.y - b1.y, dist = Math.sqrt(dx*dx + dy*dy), minDist = ballR * 2;
+                    if (dist < minDist) {
+                        let over = minDist - dist, nx = dx / (dist + 0.001), ny = dy / (dist + 0.001);
+                        b1.x -= nx * over * 0.5; b1.y -= ny * over * 0.5; b2.x += nx * over * 0.5; b2.y += ny * over * 0.5;
+                        let p = (b1.vx - b2.vx) * nx + (b1.vy - b2.vy) * ny;
+                        if (p > 0) { b1.vx -= p * nx; b1.vy -= p * ny; b2.vx += p * nx; b2.vy += p * ny; }
+                    }
+                }
+            }
+        }
+    }
+
+    function project(x, y) {
+        let z = 1.0 + (y / 650); return { x: (window.innerWidth / 2 * dpr) + x * z * dpr, y: (window.innerHeight / 2 * dpr + 50 * dpr) + y * dpr };
+    }
+
+    // ГРАФИЧЕСКИЙ БЛОК ОТРИСОВКИ БУДЕТ ВСТАВЛЕН СЮДА (ЗАХОД №2)
+    function render() {
+        updatePhysics(); ctx.resetTransform(); ctx.scale(dpr, dpr);
+        let sW = window.innerWidth, sH = window.innerHeight, horizonY = sH * 0.38;
+        
+        // Велюровые шторы на стене
+        for (let x = 0; x < sW; x++) {
+            let w = Math.sin(x * 0.06) * 0.5 + 0.5;
+            ctx.fillStyle = `rgb(${Math.floor(45+w*25)},${Math.floor(15+w*10)},${Math.floor(25+w*15)})`; ctx.fillRect(x, 0, 1, horizonY);
+        }
+        
+        // Подсветка от ламп бра
+        let wGlow = ctx.createRadialGradient(sW/2, horizonY*0.5, 20, sW/2, horizonY*0.5, sW*0.4);
+        wGlow.addColorStop(0, 'rgba(251,191,36,0.06)'); wGlow.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = wGlow; ctx.fillRect(0, 0, sW, horizonY);
+        
+        // Песочно-коричневый ковролин пола
+        let fGrad = ctx.createLinearGradient(sW/2, horizonY, sW/2, sH);
+        fGrad.addColorStop(0, '#2b231a'); fGrad.addColorStop(0.5, '#423528'); fGrad.addColorStop(1, '#1f1812');
+        ctx.fillStyle = fGrad; ctx.fillRect(0, horizonY, sW, sH - horizonY);
+        ctx.fillStyle = '#4a2216'; ctx.fillRect(0, horizonY - 4, sW, 6);
+
+        // Отрисовка светильников бра
+        [sW * 0.22, sW * 0.78].forEach(lx => {
+            let ly = horizonY * 0.45; ctx.fillStyle = 'rgba(251,191,36,0.16)';
+            ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx - 50, 0); ctx.lineTo(lx + 50, 0); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx - 45, horizonY - 4); ctx.lineTo(lx + 45, horizonY - 4); ctx.fill();
+            ctx.fillStyle = '#f59e0b'; ctx.fillRect(lx - 4, ly - 8, 8, 16);
+        });
+        
+        // Тень под столом
+        let fSh = ctx.createRadialGradient(sW/2, sH/2 + 100, 30, sW/2, sH/2 + 140, 240);
+        fSh.addColorStop(0, 'rgba(0,0,0,0.9)'); fSh.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = fSh; ctx.beginPath(); ctx.arc(sW/2, sH/2 + 100, 240, 0, Math.PI * 2); ctx.fill();
+
+        // Коричневое основание стола
+        ctx.fillStyle = '#2d150b'; ctx.beginPath();
+        let b0 = project(-tableW/2 - borderThick, -tableH/2 - borderThick), b3 = project(tableW/2 + borderThick, -tableH/2 - borderThick);
+        let b2_ = project(tableW/2 + borderThick, tableH/2 + borderThick), b1_ = project(-tableW/2 - borderThick, tableH/2 + borderThick);
+        ctx.moveTo(b0.x/dpr, b0.y/dpr); ctx.lineTo(b3.x/dpr, b3.y/dpr); ctx.lineTo(b2_.x/dpr, b2_.y/dpr); ctx.lineTo(b1_.x/dpr, b1_.y/dpr); ctx.fill();
+
+        // Зеленое сукно стола
+        ctx.fillStyle = '#056b49'; ctx.beginPath();
+        let s0 = project(-tableW/2, -tableH/2), s3 = project(tableW/2, -tableH/2), s2 = project(tableW/2, tableH/2), s1 = project(-tableW/2, tableH/2);
+        ctx.moveTo(s0.x/dpr, s0.y/dpr); ctx.lineTo(s3.x/dpr, s3.y/dpr); ctx.lineTo(s2.x/dpr, s2.y/dpr); ctx.lineTo(s1.x/dpr, s1.y/dpr); ctx.fill();
+
+        // Объемные лузы со скобами
+        pk.forEach(p => {
+            let pt = project(p.x, p.y);
+            let pG = ctx.createRadialGradient(pt.x/dpr, pt.y/dpr, 2, pt.x/dpr, pt.y/dpr, pocketR);
+            pG.addColorStop(0, '#020204'); pG.addColorStop(0.7, '#0f1015'); pG.addColorStop(0.95, '#1c1d24'); pG.addColorStop(1, '#056b49');
+            ctx.fillStyle = pG; ctx.beginPath(); ctx.arc(pt.x/dpr, pt.y/dpr, pocketR, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#475569'; ctx.lineWidth = 2.5; ctx.beginPath();
+            if (p.y < 0) ctx.arc(pt.x/dpr, pt.y/dpr + 1, pocketR - 1, Math.PI, 0);
+            else if (p.y > 0) ctx.arc(pt.x/dpr, pt.y/dpr - 1, pocketR - 1, 0, Math.PI);
+            else ctx.arc(pt.x/dpr + (p.x < 0 ? 1 : -1), pt.y/dpr, pocketR - 1, -Math.PI*0.5, Math.PI*0.5);
+            ctx.stroke();
+        });
+
+        // Концентрированные тени под шарами
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        balls.forEach(b => { if (!b.in) { let pt = project(b.x, b.y); ctx.beginPath(); ctx.arc(pt.x/dpr + 1, pt.y/dpr + 2, ballR * 0.45, 0, Math.PI * 2); ctx.fill(); } });
+
+        // Объёмные шары с номерами
+        balls.forEach(b => {
+            if (!b.in) {
+                let pt = project(b.x, b.y), cR = ballR * (1.0 + (b.y / 650));
+                let g = ctx.createRadialGradient(pt.x/dpr - cR*0.3, pt.y/dpr - cR*0.3, 1, pt.x/dpr, pt.y/dpr, cR);
+                if (b.isCue) { g.addColorStop(0, '#ffffff'); g.addColorStop(0.85, '#cbd5e1'); g.addColorStop(1, '#475569'); }
+                else if (b.color === '#dc2626') { g.addColorStop(0, '#f87171'); g.addColorStop(0.75, '#dc2626'); g.addColorStop(1, '#6b1111'); }
+                else { g.addColorStop(0, '#fef08a'); g.addColorStop(0.75, '#f59e0b'); g.addColorStop(1, '#78350f'); }
+                ctx.fillStyle = g; ctx.beginPath(); ctx.arc(pt.x/dpr, pt.y/dpr, cR, 0, Math.PI * 2); ctx.fill();
+
+                if (!b.isCue) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; ctx.beginPath();
+                    ctx.ellipse(pt.x/dpr + cR*0.05, pt.y/dpr + cR*0.05, cR * 0.35, cR * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#0f172a'; ctx.font = `bold ${Math.floor(cR * 0.42)}px Arial`;
+                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(b.num, pt.x/dpr + cR * 0.05, pt.y/dpr + cR * 0.07);
+                }
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; ctx.beginPath(); ctx.arc(pt.x/dpr - cR*0.3, pt.y/dpr - cR*0.3, cR*0.18, 0, Math.PI * 2); ctx.fill();
+            }
+        });
+
+        // Лазерная линия наводки и деревянный кий
+        if (isAiming && !cueBall.in) {
+            let bPt = project(cueBall.x, cueBall.y);
+            ctx.save(); ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]); ctx.beginPath();
+            ctx.moveTo(bPt.x / dpr, bPt.y / dpr); ctx.lineTo(bPt.x / dpr + Math.cos(aimAngle) * 160, bPt.y / dpr + Math.sin(aimAngle) * 160); ctx.stroke(); ctx.restore();
+            
+            ctx.save();
+            let cueGrad = ctx.createLinearGradient(bPt.x/dpr - Math.cos(aimAngle)*30, bPt.y/dpr - Math.sin(aimAngle)*30, bPt.x/dpr - Math.cos(aimAngle)*150, bPt.y/dpr - Math.sin(aimAngle)*150);
+            cueGrad.addColorStop(0, '#fef08a'); cueGrad.addColorStop(0.2, '#b45309'); cueGrad.addColorStop(1, '#451a03');
+            ctx.strokeStyle = cueGrad; ctx.lineWidth = 3.5; ctx.beginPath();
+            ctx.moveTo(bPt.x / dpr - Math.cos(aimAngle) * 25, bPt.y / dpr - Math.sin(aimAngle) * 25);
+            ctx.lineTo(bPt.x / dpr - Math.cos(aimAngle) * 140, bPt.y / dpr - Math.sin(aimAngle) * 140);
+            ctx.stroke(); ctx.restore();
+        }
+
+        // Кинематографичная виньетка кадра
+        let vig = ctx.createRadialGradient(sW/2, sH/2, sH*0.4, sW/2, sH/2, sW*0.75);
+        vig.addColorStop(0, 'rgba(0,0,0,0)'); vig.addColorStop(1, 'rgba(2,2,4,0.4)');
+        ctx.fillStyle = vig; ctx.fillRect(0, 0, sW, sH);
+        requestAnimationFrame(render);
+    }
+    render();
+</script>
+</body>
+</html>

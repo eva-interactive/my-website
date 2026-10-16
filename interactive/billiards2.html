@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Бильярд 3D — Финал</title>
+    <style>
+        body,html{margin:0;padding:0;overflow:hidden;background-color:#040406;height:100%}
+        canvas{display:block;width:100vw;height:100vh}
+    </style>
+</head>
+<body>
+    <!-- ТАБЛО СЧЕТА В СТИЛЕ НЕЖНО-ГОЛУБОЙ МИНИМАЛИЗМ -->
+    <div id="scoreboard" style="
+        position: absolute; top: 25px; left: 50%; transform: translateX(-50%);
+        display: flex; align-items: center; gap: 30px;
+        background: rgba(5, 5, 8, 0.8); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+        padding: 12px 32px; border-radius: 50px; border: 1px solid rgba(176, 224, 230, 0.2);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        z-index: 100; pointer-events: none; transition: all 0.4s ease;
+    ">
+        <!-- Игрок -->
+        <div style="text-align: center;">
+            <div id="p-label" style="font-size: 11px; font-weight: 700; letter-spacing: 2px; color: #b0e0e6; text-shadow: 0 0 8px rgba(176,224,230,0.6); transition: all 0.3s;">ВЫ</div>
+            <div id="p-score" style="font-size: 32px; font-weight: 800; color: #ffffff; line-height: 1.1; margin-top: 2px;">0</div>
+        </div>
+        
+        <!-- Разделитель -->
+        <div style="font-size: 24px; color: rgba(176, 224, 230, 0.25); font-weight: 300; margin-bottom: 2px;">|</div>
+        
+        <!-- Искусственный Интеллект -->
+        <div style="text-align: center;">
+            <div id="ai-label" style="font-size: 11px; font-weight: 700; letter-spacing: 2px; color: rgba(255,255,255,0.3); text-shadow: none; transition: all 0.3s;">РОБОТ</div>
+            <div id="ai-score" style="font-size: 32px; font-weight: 800; color: rgba(255,255,255,0.3); line-height: 1.1; margin-top: 2px;">0</div>
+        </div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+<script>
+    const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d'),dpr=window.devicePixelRatio||1;
+    let w,h,cx,cy,cueBall={x:0,y:130,vx:0,vy:0,spinX:0,spinY:0,in:false,isCue:true,color:'#ffffff',num:0};
+    let isAiming=false,aimAngle=0,currentTurn='player',isAiThinking=false,aiTargetAngle=0;
+    let scorePlayer = 0, scoreAI = 0;
+    const tableW=380,tableH=440,borderThick=16,ballR=12,friction=0.991,pocketR=21,balls=[];
+    const pk=[{x:-tableW/2,y:-tableH/2},{x:tableW/2,y:-tableH/2},{x:-tableW/2-4,y:0},{x:tableW/2+4,y:0},{x:-tableW/2,y:tableH/2},{x:tableW/2,y:tableH/2}];
+
+    function updateScoreboardUI() {
+        const pLabel = document.getElementById('p-label');
+        const pScore = document.getElementById('p-score');
+        const aiLabel = document.getElementById('ai-label');
+        const aiScore = document.getElementById('ai-score');
+        if (currentTurn === 'player') {
+            pLabel.style.color = '#b0e0e6'; pLabel.style.textShadow = '0 0 8px rgba(176,224,230,0.6)'; pScore.style.color = '#ffffff';
+            aiLabel.style.color = 'rgba(255,255,255,0.3)'; aiLabel.style.textShadow = 'none'; aiScore.style.color = 'rgba(255,255,255,0.3)';
+        } else {
+            aiLabel.style.color = '#ff8888'; aiLabel.style.textShadow = '0 0 8px rgba(255,136,136,0.6)'; aiScore.style.color = '#ffffff';
+            pLabel.style.color = 'rgba(255,255,255,0.3)'; pLabel.style.textShadow = 'none'; pScore.style.color = 'rgba(255,255,255,0.3)';
+        }
+    }
+
+    function project(x,y){let z=1.0+(y/650);return{x:(window.innerWidth/2*dpr)+x*z*dpr,y:(window.innerHeight/2*dpr+60*dpr)+y*dpr};}
+    
+    function initGame(){
+        balls.length=0;cueBall.x=0;cueBall.y=130;cueBall.vx=0;cueBall.vy=0;cueBall.spinX=0;cueBall.spinY=0;cueBall.in=false;balls.push(cueBall);
+        let startY=-120,count=1;
+        for(let r=0;r<5;r++){let rY=startY-r*(ballR*1.75),rStartX=-r*ballR;for(let c=0;r>=c;c++){let rX=rStartX+c*(ballR*2.05),ballColor=(count%2===0)?'#dc2626':'#f59e0b';balls.push({x:rX,y:rY,vx:0,vy:0,spinX:0,spinY:0,in:false,isCue:false,color:ballColor,num:count});count++;}}
+        currentTurn='player';isAiThinking=false;isAiming=false;
+        scorePlayer = 0; scoreAI = 0;
+        document.getElementById('p-score').innerText = scorePlayer;
+        document.getElementById('ai-score').innerText = scoreAI;
+        updateScoreboardUI();
+    }
+    
+    function resize(){w=canvas.width=window.innerWidth*dpr;h=canvas.height=window.innerHeight*dpr;cx=w/2;cy=h/2+60*dpr;initGame();}
+    window.addEventListener('resize',resize);resize();
+
+    function startAim(clientX,clientY){
+        if(currentTurn!=='player'||isAiThinking||cueBall.in)return;
+        let moving=balls.filter(b=>!b.in&&(Math.abs(b.vx)>0.05||Math.abs(b.vy)>0.05));if(moving.length>0)return;
+        isAiming=true;moveAim(clientX,clientY);
+    }
+    
+    function moveAim(clientX,clientY){
+        if(!isAiming)return;
+        let bPt=project(cueBall.x,cueBall.y);
+        aimAngle=Math.atan2(clientY-bPt.y/dpr,clientX-bPt.x/dpr) + Math.PI;
+    }
+    function endAim(){
+        if(!isAiming)return;isAiming=false;
+        cueBall.vx=Math.cos(aimAngle)*6.5;cueBall.vy=Math.sin(aimAngle)*6.5;
+        cueBall.spinX=-Math.sin(aimAngle)*0.45;cueBall.spinY=Math.cos(aimAngle)*0.45;
+        currentTurn='ai';
+        updateScoreboardUI();
+    }
+
+    // Обработка тач-событий с учетом первого пальца на планшете
+    canvas.addEventListener('touchstart',(e)=>{e.preventDefault();if(e.touches.length>0)startAim(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
+    canvas.addEventListener('touchmove',(e)=>{e.preventDefault();if(e.touches.length>0)moveAim(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
+    canvas.addEventListener('touchend',(e)=>{e.preventDefault();endAim();});
+    canvas.addEventListener('mousedown',(e)=>{startAim(e.clientX,e.clientY);});canvas.addEventListener('mousemove',(e)=>{moveAim(e.clientX,e.clientY);});canvas.addEventListener('mouseup',endAim);
+
+    function thinkAI(){
+        if(cueBall.in){ 
+            cueBall.in = false; cueBall.x = 0; cueBall.y = 130; cueBall.vx = 0; cueBall.vy = 0;
+        }
+        let bestTarget=null,bestScore=-Infinity;
+        for(let i=1;i<balls.length;i++){
+            let target=balls[i];if(target.in)continue;
+            pk.forEach(p=>{let score=-Math.sqrt((p.x-target.x)**2+(p.y-target.y)**2)-Math.sqrt((target.x-cueBall.x)**2+(target.y-cueBall.y)**2)*0.3;if(score>bestScore){bestScore=score;bestTarget=target;}});
+        }
+        if(bestTarget){
+            aiTargetAngle=Math.atan2(bestTarget.y-cueBall.y,bestTarget.x-cueBall.x);aimAngle=aiTargetAngle;isAiming=true;
+            setTimeout(()=>{
+                isAiming=false;cueBall.vx=Math.cos(aiTargetAngle)*6.0;cueBall.vy=Math.sin(aiTargetAngle)*6.0;cueBall.spinX=(Math.random()-0.5)*0.3;
+                currentTurn='player';isAiThinking=false;updateScoreboardUI();
+            },1200);
+        }else{currentTurn='player';isAiThinking=false;updateScoreboardUI();}
+    }
+
+    function updatePhysics(){
+        // Возврат белого битка, если он упал, а остальные шары полностью остановились
+        if (cueBall.in && currentTurn === 'player' && !isAiThinking) {
+            let activeBalls = balls.filter(b=>!b.in && b!==cueBall && (Math.abs(b.vx)>0.02 || Math.abs(b.vy)>0.02));
+            if (activeBalls.length === 0) {
+                cueBall.in = false; cueBall.x = 0; cueBall.y = 130; cueBall.vx = 0; cueBall.vy = 0; cueBall.spinX = 0; cueBall.spinY = 0;
+            }
+        }
+
+        let active=balls.filter(b=>!b.in&&(Math.abs(b.vx)>0.02||Math.abs(b.vy)>0.02));
+        if(active.length===0&&currentTurn==='ai'&&!isAiThinking){isAiThinking=true;thinkAI();}
+        
+        balls.forEach(b=>{
+            if(!b.in){
+                b.vx+=b.spinX*0.015;b.vy+=b.spinY*0.015;b.spinX*=0.96;b.spinY*=0.96;b.x+=b.vx;b.y+=b.vy;b.vx*=friction;b.vy*=friction;
+                if(Math.abs(b.vx)<0.015)b.vx=0;if(Math.abs(b.vy)<0.015)b.vy=0;
+                
+                pk.forEach(p=>{
+                    if(Math.sqrt((b.x-p.x)**2+(b.y-p.y)**2)<pocketR-2) {
+                        b.in=true;
+                        if (!b.isCue) {
+                            if (currentTurn === 'ai') { scorePlayer++; document.getElementById('p-score').innerText = scorePlayer; }
+                            else { scoreAI++; document.getElementById('ai-score').innerText = scoreAI; }
+                        }
+                    }
+                });
+            }
+        });
+        balls.forEach(b=>{
+            if(!b.in){
+                let lx=tableW/2-ballR,ly=tableH/2-ballR;
+                if(b.x<-lx){b.x=-lx;b.vx=-b.vx*0.85;b.vy+=b.spinX*2.5;}if(b.x>lx){b.x=lx;b.vx=-b.vx*0.85;b.vy-=b.spinX*2.5;}
+                if(b.y<-ly){b.y=-ly;b.vy=-b.vy*0.85;b.vx-=b.spinY*2.5;}if(b.y>ly){b.y=ly;b.vy=-b.vy*0.85;b.vx+=b.spinY*2.5;}
+            }
+        });
+        for(let i=0;i<balls.length;i++){
+            for(let j=i+1;j<balls.length;j++){
+                let b1=balls[i],b2=balls[j];
+                if(!b1.in&&!b2.in){
+                    let dx=b2.x-b1.x,dy=b2.y-b1.y,dist=Math.sqrt(dx*dx+dy*dy),minDist=ballR*2;
+                    if(dist<minDist){
+                        let over=minDist-dist,nx=dx/(dist+0.001),ny=dy/(dist+0.001);b1.x-=nx*over*0.5;b1.y-=ny*over*0.5;b2.x+=nx*over*0.5;b2.y+=ny*over*0.5;
+                        let p=(b1.vx-b2.vx)*nx+(b1.vy-b2.vy)*ny;if(p>0){b1.vx-=p*nx;b1.vy-=p*ny;b2.vx+=p*nx;b2.vy+=p*ny;}
+                        let tsX=b1.spinX;b1.spinX=b2.spinX*0.5;b2.spinX=tsX*0.5;
+                    }
+                }
+            }
+        }
+    }
+
+    function render(){
+        updatePhysics();
+        ctx.resetTransform();
+        ctx.scale(dpr,dpr);
+        
+        let sW = canvas.width / dpr;
+        let sH = canvas.height / dpr;
+        
+        // Очищаем экран глубоким темным цветом
+        ctx.fillStyle='#050508'; ctx.fillRect(0,0,sW,sH);
+
+        // ОТРИСОВКА СТОЛА
+        ctx.resetTransform(); 
+        
+        ctx.fillStyle='#2d150b';ctx.beginPath();
+        let b0=project(-tableW/2-borderThick,-tableH/2-borderThick),b3=project(tableW/2+borderThick,-tableH/2-borderThick),b2_=project(tableW/2+borderThick,tableH/2+borderThick),b1_=project(-tableW/2-borderThick,tableH/2+borderThick);
+        ctx.moveTo(b0.x,b0.y);ctx.lineTo(b3.x,b3.y);ctx.lineTo(b2_.x,b2_.y);ctx.lineTo(b1_.x,b1_.y);ctx.fill();
+        
+        ctx.fillStyle='#056b49';ctx.beginPath();
+        let s0=project(-tableW/2,-tableH/2),s3=project(tableW/2,-tableH/2),s2=project(tableW/2,tableH/2),s1=project(-tableW/2,tableH/2);
+        ctx.moveTo(s0.x,s0.y);ctx.lineTo(s3.x,s3.y);ctx.lineTo(s2.x,s2.y);ctx.lineTo(s1.x,s1.y);ctx.fill();
+        
+        pk.forEach(p=>{
+            let pt=project(p.x,p.y);ctx.fillStyle='#020204';ctx.beginPath();ctx.arc(pt.x,pt.y,pocketR*dpr,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#475569';ctx.lineWidth=2*dpr;ctx.beginPath();
+            if(p.y<0)ctx.arc(pt.x,pt.y+dpr,pocketR*dpr,Math.PI,0);else if(p.y>0)ctx.arc(pt.x,pt.y-dpr,pocketR*dpr,0,Math.PI);else ctx.arc(pt.x+(p.x<0?dpr:-dpr),pt.y,pocketR*dpr,-Math.PI*0.5,Math.PI*0.5);ctx.stroke();
+        });
+        
+        ctx.fillStyle='rgba(0,0,0,0.6)';
+        balls.forEach(b=>{if(!b.in){let pt=project(b.x,b.y);ctx.beginPath();ctx.arc(pt.x+1*dpr,pt.y+2*dpr,ballR*0.45*dpr,0,Math.PI*2);ctx.fill();}});
+        
+        balls.forEach(b=>{
+            if(!b.in){
+                let pt=project(b.x,b.y),cR=ballR*(1.0+(b.y/650))*dpr,g=ctx.createRadialGradient(pt.x-cR*0.3,pt.y-cR*0.3,1,pt.x,pt.y,cR);
+                if(b.isCue){g.addColorStop(0,'#ffffff');g.addColorStop(0.85,'#cbd5e1');g.addColorStop(1,'#475569');}
+                else if(b.color==='#dc2626'){g.addColorStop(0,'#f87171');g.addColorStop(0.75,'#dc2626');g.addColorStop(1,'#6b1111');}
+                else{g.addColorStop(0,'#fef08a');g.addColorStop(0.75,'#f59e0b');g.addColorStop(1,'#78350f');}
+                ctx.fillStyle=g;ctx.beginPath();ctx.arc(pt.x,pt.y,cR,0,Math.PI*2);ctx.fill();
+                if(!b.isCue){
+                    ctx.fillStyle='#ffffff';ctx.beginPath();ctx.ellipse(pt.x,pt.y,cR*0.4,cR*0.35,0,0,Math.PI*2);ctx.fill();
+                    ctx.fillStyle='#000000';ctx.font=`bold ${Math.floor(cR*0.45)}px Arial`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(b.num,pt.x,pt.y+0.5*dpr);
+                }
+            }
+        });
+        
+        // ОТРИСОВКА КИЯ И ЛАЗЕРА (Управление полностью за рукоятку сзади)
+        if(isAiming&&!cueBall.in){
+            let bPt=project(cueBall.x,cueBall.y);
+            
+            // Лазерный луч летит в противоположную от пальца сторону
+            ctx.save();
+            ctx.strokeStyle=currentTurn==='ai'?'rgba(220,38,38,0.5)':'rgba(176,224,230,0.6)';
+            ctx.lineWidth=1.5*dpr; ctx.beginPath(); ctx.moveTo(bPt.x,bPt.y);
+            ctx.lineTo(bPt.x+Math.cos(aimAngle)*160*dpr,bPt.y+Math.sin(aimAngle)*160*dpr);
+            ctx.stroke(); ctx.restore();
+            
+            // Кий следует прямо за пальцем игрока
+            ctx.save();
+            ctx.strokeStyle='#b45309'; ctx.lineWidth=3.5*dpr; ctx.beginPath();
+            ctx.moveTo(bPt.x-Math.cos(aimAngle)*25*dpr, bPt.y-Math.sin(aimAngle)*25*dpr);
+            ctx.lineTo(bPt.x-Math.cos(aimAngle)*140*dpr, bPt.y-Math.sin(aimAngle)*140*dpr);
+            ctx.stroke(); ctx.restore();
+        }
+        
+        requestAnimationFrame(render);
+    }
+    render();
+</script>
+</body>
+</html>
+
