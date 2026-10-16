@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Бильярд 3D — Финал</title>
     <style>
-        body,html{margin:0;padding:0;overflow:hidden;background-color:#040406;height:100%}
+        body,html{margin:0;padding:0;overflow:hidden;background-color:#050508;height:100%}
         canvas{display:block;width:100vw;height:100vh}
     </style>
 </head>
@@ -42,7 +42,8 @@
     let w,h,cx,cy,cueBall={x:0,y:130,vx:0,vy:0,spinX:0,spinY:0,in:false,isCue:true,color:'#ffffff',num:0};
     let isAiming=false,aimAngle=0,currentTurn='player',isAiThinking=false,aiTargetAngle=0;
     let scorePlayer = 0, scoreAI = 0;
-    const tableW=380,tableH=440,borderThick=16,ballR=12,friction=0.991,pocketR=21,balls=[];
+    // РАЗМЕРЫ ИСПРАВЛЕНЫ: Стол пропорционально уменьшен (300 на 350)
+    const tableW=300,tableH=350,borderThick=16,ballR=12,friction=0.991,pocketR=21,balls=[];
     const pk=[{x:-tableW/2,y:-tableH/2},{x:tableW/2,y:-tableH/2},{x:-tableW/2-4,y:0},{x:tableW/2+4,y:0},{x:-tableW/2,y:tableH/2},{x:tableW/2,y:tableH/2}];
 
     function updateScoreboardUI() {
@@ -59,7 +60,8 @@
         }
     }
 
-    function project(x,y){let z=1.0+(y/650);return{x:(window.innerWidth/2*dpr)+x*z*dpr,y:(window.innerHeight/2*dpr+60*dpr)+y*dpr};}
+    // ИСПРАВЛЕНО: Чистая 3D-проекция без лишних сдвигов
+    function project(x,y){let z=1.0+(y/650);return{x:(window.innerWidth/2*dpr)+x*z*dpr,y:(window.innerHeight/2*dpr)+y*dpr};}
     
     function initGame(){
         balls.length=0;cueBall.x=0;cueBall.y=130;cueBall.vx=0;cueBall.vy=0;cueBall.spinX=0;cueBall.spinY=0;cueBall.in=false;balls.push(cueBall);
@@ -72,7 +74,8 @@
         updateScoreboardUI();
     }
     
-    function resize(){w=canvas.width=window.innerWidth*dpr;h=canvas.height=window.innerHeight*dpr;cx=w/2;cy=h/2+60*dpr;initGame();}
+    // ИСПРАВЛЕНО: Идеальное центрирование по осям X и Y
+    function resize(){w=canvas.width=window.innerWidth*dpr;h=canvas.height=window.innerHeight*dpr;cx=w/2;cy=h/2;initGame();}
     window.addEventListener('resize',resize);resize();
 
     function startAim(clientX,clientY){
@@ -94,7 +97,6 @@
         updateScoreboardUI();
     }
 
-    // Обработка тач-событий с учетом первого пальца на планшете
     canvas.addEventListener('touchstart',(e)=>{e.preventDefault();if(e.touches.length>0)startAim(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
     canvas.addEventListener('touchmove',(e)=>{e.preventDefault();if(e.touches.length>0)moveAim(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
     canvas.addEventListener('touchend',(e)=>{e.preventDefault();endAim();});
@@ -119,7 +121,6 @@
     }
 
     function updatePhysics(){
-        // Возврат белого битка, если он упал, а остальные шары полностью остановились
         if (cueBall.in && currentTurn === 'player' && !isAiThinking) {
             let activeBalls = balls.filter(b=>!b.in && b!==cueBall && (Math.abs(b.vx)>0.02 || Math.abs(b.vy)>0.02));
             if (activeBalls.length === 0) {
@@ -216,14 +217,12 @@
         if(isAiming&&!cueBall.in){
             let bPt=project(cueBall.x,cueBall.y);
             
-            // Лазерный луч летит в противоположную от пальца сторону
             ctx.save();
             ctx.strokeStyle=currentTurn==='ai'?'rgba(220,38,38,0.5)':'rgba(176,224,230,0.6)';
             ctx.lineWidth=1.5*dpr; ctx.beginPath(); ctx.moveTo(bPt.x,bPt.y);
             ctx.lineTo(bPt.x+Math.cos(aimAngle)*160*dpr,bPt.y+Math.sin(aimAngle)*160*dpr);
             ctx.stroke(); ctx.restore();
             
-            // Кий следует прямо за пальцем игрока
             ctx.save();
             ctx.strokeStyle='#b45309'; ctx.lineWidth=3.5*dpr; ctx.beginPath();
             ctx.moveTo(bPt.x-Math.cos(aimAngle)*25*dpr, bPt.y-Math.sin(aimAngle)*25*dpr);
