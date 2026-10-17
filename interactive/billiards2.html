@@ -65,8 +65,20 @@
     
     function initGame(){
         balls.length=0;cueBall.x=0;cueBall.y=130;cueBall.vx=0;cueBall.vy=0;cueBall.spinX=0;cueBall.spinY=0;cueBall.in=false;balls.push(cueBall);
-        let startY=-120,count=1;
-        for(let r=0;r<5;r++){let rY=startY-r*(ballR*1.75),rStartX=-r*ballR;for(let c=0;r>=c;c++){let rX=rStartX+c*(ballR*2.05),ballColor=(count%2===0)?'#dc2626':'#f59e0b';balls.push({x:rX,y:rY,vx:0,vy:0,spinX:0,spinY:0,in:false,isCue:false,color:ballColor,num:count});count++;}}
+        let startY=-60,count=1;
+
+        // ИСПРАВЛЕНО: Геометрически точная расстановка без наложения шаров
+        for(let r=0;r<5;r++){
+            // Высота правильного треугольника равна: ballR * sqrt(3) -> ~1.73205
+            let rY=startY-r*(ballR*Math.sqrt(3)), rStartX=-r*ballR;
+            for(let c=0;r>=c;c++){
+                // Расстояние между центрами в ряду строго равно диаметру шара (ballR * 2)
+                let rX=rStartX+c*(ballR*2), ballColor=(count%2===0)?'#dc2626':'#f59e0b';
+                balls.push({x:rX,y:rY,vx:0,vy:0,spinX:0,spinY:0,in:false,isCue:false,color:ballColor,num:count});
+                count++;
+            }
+        }
+
         currentTurn='player';isAiThinking=false;isAiming=false;
         scorePlayer = 0; scoreAI = 0;
         document.getElementById('p-score').innerText = scorePlayer;
