@@ -146,30 +146,15 @@
             <a href="interactive/billiards1.html" class="btn" data-goatcounter-click="click-billiards1">Бильярд:1</a>
             <a href="interactive/billiards2.html" class="btn" data-goatcounter-click="click-billiards2">Бильярд:2</a>
 
+        <a href="interactive/tetris.html" class="btn" data-goatcounter-click="click-tetris">Тетрис 3D</a>
+
         </div>
 
-<!-- Блок поддержки с акцентом -->
-<div style="margin-top: 25px; text-align: center;">
-  <p style="color: #ffffff; font-weight: 600; font-size: 16px; margin-bottom: 12px;">
-    Новые анимации появляются благодаря поддержке зрителей.
-  </p>
-  <p style="color: #b0e0e6; font-size: 14px; margin-bottom: 12px;">
-    Спасибо, что помогаете проекту расти!
-  </p>
-
-  <a href="https://pay.cloudtips.ru/p/08c35809"
-     target="_blank"
-     rel="noopener noreferrer"
-     class="btn btn-donate"
-     data-goatcounter-click="click-donate-cloudtips">
-    Поддержать через CloudTips
-  </a>
-</div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            document.querySelectorAll('.btn, .btn-donate').forEach(button => {
+            document.querySelectorAll('.btn').forEach(button => {
                 button.addEventListener('click', (jsEvent) => {
                     const eventName = button.getAttribute('data-goatcounter-click');
 

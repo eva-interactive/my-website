@@ -1,0 +1,198 @@
+cat << 'EOF' > ~/my-website1/interactive/tetris.html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Тетрис 3D</title>
+    <style>body,html{margin:0;padding:0;overflow:hidden;background-color:#0b0b12;height:100%}canvas{display:block;width:100vw;height:100vh}</style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+<script>
+    var canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d'), dpr = window.devicePixelRatio || 1;
+    var w, h, cx, cy, boardW = 340, boardH = 680, blockSize = 34;
+    var grid = new Int32Array(200), score = 0, lastDropTime = Date.now();
+    var normalInterval = 600, fastInterval = 35, currentInterval = normalInterval, touchStartY = 0;
+    var currentPiece = { size: 0, matrix: new Int32Array(16), x: 0, y: 0, type: 0 };
+
+    function getBlockColor(t, s) {
+        var colors = {
+            1: ['#00bfff', '#80e5ff', '#005f80'], 2: ['#ff8c00', '#ffc480', '#995400'],
+            3: ['#8a2be2', '#d39eff', '#52148c'], 4: ['#32cd32', '#99e699', '#1e7b1e'],
+            5: ['#ff1493', '#ff80c5', '#990c58'], 6: ['#1e90ff', '#90c8ff', '#0056b3'],
+            7: ['#ffd700', '#fff080', '#998100']
+        };
+        return colors[t] ? colors[t][s] : '#000000';
+    }
+
+    function getShapeData(t, i) {
+        if (t == 1) { if(i==0) return 4; return (i==5||i==6||i==7||i==8)?1:0; }
+        if (t == 2) { if(i==0) return 2; return 1; }
+        if (t == 3) { if(i==0) return 3; return (i==2||i==4||i==5||i==6)?1:0; }
+        if (t == 4) { if(i==0) return 3; return (i==2||i==3||i==4||i==5)?1:0; }
+        if (t == 5) { if(i==0) return 3; return (i==1||i==2||i==5||i==6)?1:0; }
+        if (t == 6) { if(i==0) return 3; return (i==1||i==4||i==5||i==6)?1:0; }
+        if (t == 7) { if(i==0) return 3; return (i==3||i==4||i==5||i==6)?1:0; }
+        return 0;
+    }
+
+    function drawBlock(x, y, t) {
+        var px = cx - boardW / 2 + x * blockSize, py = cy - boardH / 2 + (19 - y) * blockSize, size = blockSize, f = size * 0.15;
+        var grad = ctx.createLinearGradient(px, py, px, py + size);
+        grad.addColorStop(0, getBlockColor(t, 1)); grad.addColorStop(1, getBlockColor(t, 2));
+        ctx.fillStyle = grad; ctx.fillRect(px, py, size, size);
+        ctx.fillStyle = getBlockColor(t, 1); ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + f, py - f); ctx.lineTo(px + size - f, py - f); ctx.lineTo(px + size, py); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = getBlockColor(t, 2); ctx.beginPath(); ctx.moveTo(px + size, py); ctx.lineTo(px + size + f, py - f); ctx.lineTo(px + size + f, py + size - f); ctx.lineTo(px + size, py + size); ctx.closePath(); ctx.fill();
+    }
+
+    function spawnPiece() {
+        var t = Math.floor(Math.random() * 7) + 1, s = getShapeData(t, 0);
+        currentPiece.size = s; currentPiece.type = t; currentPiece.x = Math.floor((10 - s) / 2); currentPiece.y = 19;
+        for (var i = 0; i < 16; i++) currentPiece.matrix[i] = getShapeData(t, i + 1);
+        if (collide()) { for (var i = 0; i < 200; i++) grid[i] = 0; score = 0; }
+        currentInterval = normalInterval;
+    }
+
+    function collide() {
+        var s = currentPiece.size;
+        for (var r = 0; r < s; r++) {
+            for (var c = 0; c < s; c++) {
+                if (currentPiece.matrix[r * s + c] !== 0) {
+                    var nx = currentPiece.x + c, ny = currentPiece.y - r;
+                    if (nx < 0 || nx >= 10 || ny < 0) return true;
+                    if (ny < 20 && grid[ny * 10 + nx] !== 0) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function merge() {
+        var s = currentPiece.size;
+        for (var r = 0; r < s; r++) {
+            for (var c = 0; c < s; c++) {
+                if (currentPiece.matrix[r * s + c] !== 0) {
+                    var tx = currentPiece.x + c, ty = currentPiece.y - r;
+                    if (ty >= 0 && ty < 20) grid[ty * 10 + tx] = currentPiece.type;
+                }
+            }
+        }
+    }
+
+    function rotate() {
+        var s = currentPiece.size, rot = new Int32Array(16), old = new Int32Array(currentPiece.matrix);
+        for (var r = 0; r < s; r++) { for (var c = 0; c < s; c++) rot[c * s + (s - 1 - r)] = currentPiece.matrix[r * s + c]; }
+        for (var i = 0; i < 16; i++) currentPiece.matrix[i] = rot[i];
+        if (collide()) { for (var i = 0; i < 16; i++) currentPiece.matrix[i] = old[i]; }
+    }
+
+    function clearLines() {
+        var cl = 0;
+        for (var y = 19; y >= 0; y--) {
+            var full = true;
+            for (var x = 0; x < 10; x++) { if (grid[y * 10 + x] === 0) { full = false; break; } }
+            if (full) {
+                cl++;
+                for (var my = y; my < 19; my++) { for (var x = 0; x < 10; x++) grid[my * 10 + x] = grid[(my + 1) * 10 + x]; }
+                for (var x = 0; x < 10; x++) grid[19 * 10 + x] = 0;
+                y++;
+            }
+        }
+        if (cl === 1) score += 100; else if (cl === 2) score += 300; else if (cl === 3) score += 700; else if (cl > 3) score += 1500;
+    }
+
+    function drop() {
+        currentPiece.y--;
+        if (collide()) { currentPiece.y++; merge(); clearLines(); spawnPiece(); }
+    }
+
+    function move(dir) {
+        currentPiece.x += dir;
+        if (collide()) currentPiece.x -= dir;
+    }
+
+    var isMoved = false;
+
+    window.addEventListener('touchstart', function(e) {
+        if (e.touches && e.touches.length > 0) {
+            var tx = e.touches[0].clientX;
+            var ty = e.touches[0].clientY;
+            touchStartY = ty;
+            isMoved = false; // Сбрасываем флаг движения при новом касании
+
+            // Боковые зоны для мгновенного смещения влево/вправо работают сразу
+            if (ty <= h * 0.8) {
+                if (tx < w * 0.3) { move(-1); isMoved = true; }
+                else if (tx > w * 0.7) { move(1); isMoved = true; }
+            } else {
+                drop(); // Самый низ — уронить фигуру
+                isMoved = true;
+            }
+        }
+    });
+
+    window.addEventListener('touchmove', function(e) {
+        if (e.touches && e.touches.length > 0) {
+            var dy = e.touches[0].clientY - touchStartY;
+            if (dy > 25) {
+                currentInterval = fastInterval;
+                isMoved = true; // Помечаем, что это свайп, а не просто тап
+            }
+        }
+    });
+
+    window.addEventListener('touchend', function(e) {
+        currentInterval = normalInterval;
+        
+        // Если палец просто подняли в центральной зоне БЕЗ свайпа и БЕЗ сдвигов — только тогда крутим
+        if (!isMoved) {
+            rotate();
+        }
+    });
+    window.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowLeft') move(-1); if (e.key === 'ArrowRight') move(1);
+        if (e.key === 'ArrowDown') drop(); if (e.key === 'ArrowUp') rotate();
+    });
+
+    function resize() {
+        w = window.innerWidth; h = window.innerHeight;
+        canvas.width = w * dpr; canvas.height = h * dpr; ctx.scale(dpr, dpr);
+        cx = w / 2; cy = h / 2;
+        blockSize = Math.min(34, Math.min(w / 14, h / 22));
+        boardW = blockSize * 10; boardH = blockSize * 20;
+    }
+    window.addEventListener('resize', resize); resize();
+    spawnPiece();
+
+    function draw() {
+        ctx.fillStyle = '#0b0b12'; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#05050a'; ctx.fillRect(cx - boardW / 2, cy - boardH / 2, boardW, boardH);
+        ctx.strokeStyle = '#00aaff'; ctx.lineWidth = 3; ctx.strokeRect(cx - boardW / 2, cy - boardH / 2, boardW, boardH);
+
+        for (var y = 0; y < 20; y++) {
+            for (var x = 0; x < 10; x++) {
+                var t = grid[y * 10 + x]; if (t > 0) drawBlock(x, y, t);
+            }
+        }
+        var s = currentPiece.size;
+        for (var r = 0; r < s; r++) {
+            for (var c = 0; c < s; c++) {
+                if (currentPiece.matrix[r * s + c] !== 0) {
+                    var wx = currentPiece.x + c, wy = currentPiece.y - r;
+                    if (wx >= 0 && wx < 10 && wy >= 0 && wy < 20) drawBlock(wx, wy, currentPiece.type);
+                }
+            }
+        }
+        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 22px sans-serif'; ctx.fillText('СЧЕТ: ' + score, 25, 40);
+    }
+
+    (function loop() {
+        var now = Date.now();
+        if (now - lastDropTime > currentInterval) { drop(); lastDropTime = now; }
+        draw(); requestAnimationFrame(loop);
+    })();
+</script>
+</body>
+</html>
+EOF
