@@ -167,8 +167,8 @@
         canvas.width = w * dpr; canvas.height = h * dpr; ctx.scale(dpr, dpr);
         cx = w / 2; cy = h / 2;
 
-        // Рассчитываем размер кубика строго под пропорции 12х18
-        blockSize = Math.min(38, Math.min(w / 14, h / 20));
+        // Возвращаем ваш исходный проверенный вариант
+        blockSize = Math.min(34, Math.min(w / 16, h / 21.5));
         boardW = blockSize * 12;
         boardH = blockSize * 18;
     }
