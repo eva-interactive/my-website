@@ -13,7 +13,7 @@
     var canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d'), dpr = window.devicePixelRatio || 1;
     var w, h, cx, cy;
 
-    var boardW = 408, boardH = 612, blockSize = 34;
+    var boardW, boardH, blockSize;
     var grid = new Int32Array(216); 
     var score = 0, lastDropTime = Date.now();
     
@@ -169,8 +169,11 @@
 
         // Возвращаем ваш исходный проверенный вариант
         blockSize = Math.min(34, Math.min(w / 16, h / 21.5));
-        boardW = blockSize * 12;
-        boardH = blockSize * 18;
+// Рассчитываем размер ячейки так, чтобы 18 строк гарантированно влезли в 75% высоты экрана
+blockSize = Math.floor((window.innerHeight * 0.75) / 18); 
+
+boardW = blockSize * 12;
+boardH = blockSize * 18;
     }
     window.addEventListener('resize', resize); resize();
     spawnPiece();
