@@ -17,7 +17,7 @@
 
     var COLS = 12, ROWS = 18;
     var boardW, boardH, blockSize;
-    var grid = new Int32Array(216);
+    var grid = new Int32Array(COLS * ROWS);
     var score = 0, lastDropTime = Date.now();
 
     var normalInterval = 600, fastInterval = 35, currentInterval = normalInterval, touchStartY = 0;
@@ -35,7 +35,7 @@
 
     function getShapeData(t, i) {
         if (t == 1) { if(i==0) return 4; return (i==5||i==6||i==7||i==8)?1:0; }
-        if (t == 2) { if(i==0) return 2; return 1; }
+        if (t == 2) { if(i==0) return 2; return (i==1||i==2||i==5||i==6)?1:0; }
         if (t == 3) { if(i==0) return 3; return (i==2||i==4||i==5||i==6)?1:0; }
         if (t == 4) { if(i==0) return 3; return (i==2||i==3||i==4||i==5)?1:0; }
         if (t == 5) { if(i==0) return 3; return (i==1||i==2||i==5||i==6)?1:0; }
@@ -46,7 +46,7 @@
 
     function drawBlock(x, y, t) {
         var px = Math.floor(cx - boardW / 2 + x * blockSize);
-        var py = Math.floor(cy - boardH / 2 + (17 - y) * blockSize);
+        var py = Math.floor(cy - boardH / 2 + ((ROWS - 1) - y) * blockSize);
         var size = blockSize, f = size * 0.15;
 
         var grad = ctx.createLinearGradient(px, py, px, py + size);
@@ -56,15 +56,14 @@
         ctx.fillStyle = getBlockColor(t, 1); ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + f, py - f); ctx.lineTo(px + size - f, py - f); ctx.lineTo(px + size, py); ctx.closePath(); ctx.fill();
         ctx.fillStyle = getBlockColor(t, 2); ctx.beginPath(); ctx.moveTo(px + size, py); ctx.lineTo(px + size + f, py - f); ctx.lineTo(px + size + f, py + size - f); ctx.lineTo(px + size, py + size); ctx.closePath(); ctx.fill();
     }
-
     function spawnPiece() {
         var t = Math.floor(Math.random() * 7) + 1, s = getShapeData(t, 0);
         currentPiece.size = s; currentPiece.type = t;
         currentPiece.x = Math.floor((COLS - s) / 2);
-        currentPiece.y = 17;
+        currentPiece.y = ROWS - 1;
 
         for (var i = 0; i < 16; i++) currentPiece.matrix[i] = getShapeData(t, i + 1);
-        if (collide()) { for (var i = 0; i < 216; i++) grid[i] = 0; score = 0; }
+        if (collide()) { for (var i = 0; i < COLS * ROWS; i++) grid[i] = 0; score = 0; }
         currentInterval = normalInterval;
     }
 
@@ -103,13 +102,14 @@
 
     function clearLines() {
         var cl = 0;
-        for (var y = 17; y >= 0; y--) {
+        var maxRow = ROWS - 1;
+        for (var y = maxRow; y >= 0; y--) {
             var full = true;
             for (var x = 0; x < COLS; x++) { if (grid[y * COLS + x] === 0) { full = false; break; } }
             if (full) {
                 cl++;
-                for (var my = y; my < 17; my++) { for (var x = 0; x < COLS; x++) grid[my * COLS + x] = grid[(my + 1) * COLS + x]; }
-                for (var x = 0; x < COLS; x++) grid[17 * COLS + x] = 0;
+                for (var my = y; my < maxRow; my++) { for (var x = 0; x < COLS; x++) grid[my * COLS + x] = grid[(my + 1) * COLS + x]; }
+                for (var x = 0; x < COLS; x++) grid[maxRow * COLS + x] = 0;
                 y++;
             }
         }
@@ -162,37 +162,34 @@
         w = window.innerWidth; h = window.innerHeight;
         canvas.width = w * dpr; canvas.height = h * dpr; ctx.scale(dpr, dpr);
         cx = w / 2; cy = h / 2;
-        
+
         blockSize = Math.floor((h * 0.85) / ROWS);
         boardW = blockSize * COLS;
         boardH = blockSize * ROWS;
     }
 
     window.addEventListener('resize', resize);
-    
+
     function draw() {
         ctx.fillStyle = '#0b0b12'; ctx.fillRect(0, 0, w, h);
-        
+
         var startX = Math.floor(cx - boardW / 2);
         var startY = Math.floor(cy - boardH / 2);
 
-        // Двойная неоновая сине-голубая рамка стакана (внутренней сетки больше нет)
-        ctx.strokeStyle = '#005f80'; 
+        ctx.strokeStyle = '#005f80';
         ctx.lineWidth = 4;
         ctx.strokeRect(startX, startY, boardW, boardH);
-        
-        ctx.strokeStyle = '#00bfff'; 
+
+        ctx.strokeStyle = '#00bfff';
         ctx.lineWidth = 1.5;
         ctx.strokeRect(startX, startY, boardW, boardH);
 
-        // Отрисовка упавших блоков
         for (var y = 0; y < ROWS; y++) {
             for (var x = 0; x < COLS; x++) {
                 var t = grid[y * COLS + x]; if (t > 0) drawBlock(x, y, t);
             }
         }
 
-        // Отрисовка летящей фигуры
         var s = currentPiece.size;
         for (var r = 0; r < s; r++) {
             for (var c = 0; c < s; c++) {
@@ -203,7 +200,6 @@
             }
         }
 
-        // Вывод счета
         ctx.fillStyle = '#00bfff'; ctx.font = 'bold 18px monospace';
         ctx.fillText('СЧЁТ: ' + score, startX, startY - 20);
     }
