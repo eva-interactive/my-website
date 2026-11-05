@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Marble Sort Extreme</title>
+    <style>
+        body, html { margin: 0; padding: 0; overflow: hidden; background: #1a1525; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
+        canvas { display: block; background: #231b30; max-width: 100%; max-height: 100%; box-shadow: 0 0 30px rgba(0,0,0,0.6); }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="1200"></canvas>
+<script>
+class Game {
+    constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.resetGame();
+        
+        this.canvas.addEventListener('pointerdown', (e) => this.handleTouch(e));
+        this.lastTime = 0;
+        requestAnimationFrame((t) => this.loop(t));
+    }
+
+    resetGame() {
+        this.marbles = new Array();
+        this.particles = new Array(); 
+        this.boxSlots = new Array(160, 320, 480, 640); 
+        this.columnsX = new Array(160, 280, 400, 520, 640);
+        this.boxContents = new Array(new Array(), new Array(), new Array(), new Array()); 
+        
+        this.beltY = 730; // Чуть приподняли конвейер для вместимости высоких стаканов
+        this.beltSpeed = 0.25; 
+        this.gameState = 'PLAYING'; 
+        this.targetDestroyCount = 10; // Для победы нужно собрать 10 четверок
+        this.destroyedQuads = 0;
+        
+        // Размеры кнопки "Заново" в пикселях холста (800х1200)
+        this.btnX = 620; this.btnY = 40; this.btnW = 140; this.btnH = 50;
+
+        this.colors = {
+            1: new Array('#ff3b30', '#990000'), 
+            2: new Array('#34c759', '#006611'), 
+            3: new Array('#007aff', '#0033aa'), 
+            4: new Array('#ffcc00', '#aa8800'), 
+            5: new Array('#af52de', '#550088')  
+        };
+
+        // Генерируем стартовую сетку
+        this.columnsX.forEach((cx, colIdx) => {
+            for(let row = 0; row < 5; row++) {
+                this.marbles.push({
+                    col: colIdx, x: cx, y: 240 + row * 62, 
+                    color: Math.floor(Math.random() * 5) + 1, state: 'IDLE', targetBoxIdx: -1,
+                    alpha: 1.0, spawnY: 240 + row * 62
+                });
+            }
+        });
+    }
+
+    replenishColumn(colIdx) {
+        let cx = this.columnsX.at(colIdx);
+        for (let row = 0; row < 3; row++) {
+            let targetY = 380 + row * 62; 
+            this.marbles.push({
+                col: colIdx, x: cx, y: -100 - row * 65, 
+                color: Math.floor(Math.random() * 5) + 1, state: 'REPLAY_FALL', 
+                targetBoxIdx: -1, alpha: 1.0, spawnY: targetY
+            });
+        }
+    }
+
+    handleTouch(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        const clickX = ((e.clientX - rect.left) / rect.width) * 800;
+        const clickY = ((e.clientY - rect.top) / rect.height) * 1200;
+        
+        // Клик по кнопке "Заново"
+        if (clickX >= this.btnX && clickX <= this.btnX + this.btnW && clickY >= this.btnY && clickY <= this.btnY + this.btnH) {
+            this.resetGame();
+            return;
+        }
+
+        if (this.gameState !== 'PLAYING') { this.resetGame(); return; }
+        
+        if (clickY < 680) { 
+            let targetCol = -1;
+            this.columnsX.forEach((cx, idx) => {
+                if (Math.abs(clickX - cx) < 50) targetCol = idx;
+            });
+            if (targetCol !== -1) {
+                let colMarbles = this.marbles.filter(m => m.col === targetCol && m.state === 'IDLE');
+                if (colMarbles.length > 0) {
+                    colMarbles.sort((a, b) => b.y - a.y);
+                    colMarbles.at(0).state = 'FALL_TO_BELT'; 
+                }
+            }
+        }
+    }
+
+    createExplosion(x, y, colorId) {
+        let baseColor = this.colors[colorId].at(0);
+        for (let i = 0; i < 20; i++) {
+            let angle = Math.random() * Math.PI * 2;
+            let speed = 2 + Math.random() * 6;
+            this.particles.push({
+                x: x, y: y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 1,
+                radius: 2 + Math.random() * 3, color: baseColor, alpha: 1.0, decay: 0.03 + Math.random() * 0.03
+            });
+        }
+    }
+    update(dt) {
+        if (this.gameState !== 'PLAYING') return;
+        let beltCount = 0;
+
+        this.particles.forEach((p, idx) => {
+            p.x += p.vx; p.y += p.vy; p.vy += 0.2; p.alpha -= p.decay;
+            if (p.alpha <= 0) this.particles.splice(idx, 1);
+        });
+
+        for (let c = 0; c < this.columnsX.length; c++) {
+            let count = this.marbles.filter(m => m.col === c && (m.state === 'IDLE' || m.state === 'REPLAY_FALL')).length;
+            if (count === 0) this.replenishColumn(c);
+        }
+
+        this.marbles.forEach(m => {
+            if (m.state === 'REPLAY_FALL') {
+                m.y += dt * 500; 
+                if (m.y >= m.spawnY) { m.y = m.spawnY; m.state = 'IDLE'; }
+            }
+            else if (m.state === 'FALL_TO_BELT') {
+                m.y += dt * 500; 
+                if (m.y >= this.beltY) { m.y = this.beltY; m.state = 'BELT'; }
+            } 
+            else if (m.state === 'BELT') {
+                beltCount++; m.x += dt * this.beltSpeed * 800; 
+                
+                this.boxSlots.forEach((boxX, idx) => {
+                    let container = this.boxContents.at(idx);
+                    // Вместимость увеличена до 4 шаров
+                    let canDrop = container.length === 0 || (container.length < 4 && container.at(-1).color === m.color && container.at(-1).state !== 'DISSOLVING');
+                    if (Math.abs(m.x - boxX) < 10 && canDrop) {
+                        m.state = 'FALL_TO_BOX'; m.targetBoxIdx = idx;
+                        m.x = boxX; m.col = -1; 
+                        container.push(m);
+                    }
+                });
+                if (m.x > 750) m.x = 50; 
+            } 
+            else if (m.state === 'FALL_TO_BOX') {
+                let stackIndex = this.boxContents.at(m.targetBoxIdx).indexOf(m);
+                // Радиус шара стал чуть меньше (38px), шаг укладки — 80px. Дно на 1130px.
+                let targetPhysY = 1130 - stackIndex * 80; 
+                m.y += dt * 650;
+                if (m.y >= targetPhysY) { m.y = targetPhysY; m.state = 'IN_BOX'; this.checkMatch(m.targetBoxIdx); }
+            }
+            else if (m.state === 'DISSOLVING') {
+                m.alpha -= dt * 2.5;
+                if (m.alpha <= 0) {
+                    this.createExplosion(m.x, m.y, m.color);
+                    this.marbles = this.marbles.filter(item => item !== m);
+                }
+            }
+        });
+
+        if (beltCount > 5) this.gameState = 'GAMEOVER';
+        if (this.destroyedQuads >= this.targetDestroyCount) this.gameState = 'WIN';
+    }
+
+    checkMatch(boxIdx) {
+        let container = this.boxContents.at(boxIdx);
+        // Проверяем заполнение ровно на 4 шара одного цвета
+        if (container.length === 4) {
+            if (container.at(0).color === container.at(1).color && 
+                container.at(1).color === container.at(2).color && 
+                container.at(2).color === container.at(3).color) {
+                container.forEach(m => { m.state = 'DISSOLVING'; });
+                this.boxContents.at(boxIdx).length = 0;
+                this.destroyedQuads++; 
+            }
+        }
+    }
+
+    render() {
+        const ctx = this.ctx; ctx.clearRect(0, 0, 800, 1200);
+        let bgGrad = ctx.createLinearGradient(0, 0, 0, 1200);
+        bgGrad.addColorStop(0, '#2d1f3d'); bgGrad.addColorStop(1, '#150e1d');
+        ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, 800, 1200);
+
+        // КНОПКА ХОДОВОГО СБРОСА ИГРЫ
+        ctx.save();
+        ctx.fillStyle = '#3a2f4c'; ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.roundRect(this.btnX, this.btnY, this.btnW, this.btnH, 10); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('ЗАНОВО', this.btnX + this.btnW/2, this.btnY + 33);
+        ctx.restore();
+
+        // ТЕКСТЫ ИНСТРУКЦИЙ (Локализованное описание)
+        ctx.fillStyle = "#FFDD00"; ctx.font = "bold 44px sans-serif"; ctx.textAlign = "center";
+        ctx.fillText("ТРЕНИРУЙ СВОЙ МОЗГ", 360, 80);
+        
+        ctx.fillStyle = "rgba(255, 255, 255, 0.8)"; ctx.font = "bold 24px sans-serif";
+        ctx.fillText("Стакан необходимо наполнить 4 шарами одного цвета.", 400, 140);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; ctx.font = "24px sans-serif";
+        ctx.fillText(`Собрано четвёрок: ${this.destroyedQuads} из ${this.targetDestroyCount}`, 400, 185);
+
+        // Удлиненные стаканы (вмещают 4 шара, высота начинается с 760px)
+        this.boxSlots.forEach(bx => {
+            ctx.save(); ctx.lineWidth = 10; ctx.strokeStyle = "rgba(255, 255, 255, 0.15)"; ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
+            ctx.beginPath(); ctx.moveTo(bx - 46, 760); ctx.lineTo(bx - 46, 1140);
+            ctx.arcTo(bx - 46, 1170, bx + 46, 1170, 25); ctx.lineTo(bx + 46, 1140); ctx.lineTo(bx + 46, 760);
+            ctx.stroke(); ctx.fill(); ctx.restore();
+        });
+
+        // Конвейер
+        ctx.save();
+        let beltGrad = ctx.createLinearGradient(0, this.beltY - 18, 0, this.beltY + 18);
+        beltGrad.addColorStop(0, '#3a2f4c'); beltGrad.addColorStop(1, '#1e1629');
+        ctx.fillStyle = beltGrad; ctx.fillRect(40, this.beltY - 18, 720, 36);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.1)"; ctx.lineWidth = 3; ctx.strokeRect(40, this.beltY - 18, 720, 36); ctx.restore();
+
+        // Отрисовка шаров (оптимальный радиус под четверки — 38px)
+        this.marbles.forEach(m => {
+            ctx.save(); ctx.globalAlpha = m.alpha; ctx.beginPath(); ctx.arc(m.x, m.y, 38, 0, Math.PI * 2); 
+            let bitColors = this.colors[m.color];
+            let gradient = ctx.createRadialGradient(m.x - 10, m.y - 10, 3, m.x, m.y, 38);
+            gradient.addColorStop(0, '#ffffff'); gradient.addColorStop(0.2, bitColors.at(0)); gradient.addColorStop(1, bitColors.at(1)); 
+            ctx.fillStyle = gradient; ctx.fill(); ctx.restore();
+        });
+
+        this.particles.forEach(p => {
+            ctx.save(); ctx.globalAlpha = p.alpha; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        });
+
+        if (this.gameState === 'GAMEOVER') {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.85)"; ctx.fillRect(0, 0, 800, 1200);
+            ctx.fillStyle = "#ff3b30"; ctx.font = "bold 64px sans-serif"; ctx.fillText("ИГРА ОКОНЧЕНА", 400, 550);
+            ctx.fillStyle = "#ffffff"; ctx.font = "32px sans-serif"; ctx.fillText("Нажмите в любом месте для старта", 400, 630);
+        } else if (this.gameState === 'WIN') {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.85)"; ctx.fillRect(0, 0, 800, 1200);
+            ctx.fillStyle = "#34c759"; ctx.font = "bold 64px sans-serif"; ctx.fillText("УРОВЕНЬ ПРОЙДЕН!", 400, 550);
+            ctx.fillStyle = "#ffffff"; ctx.font = "32px sans-serif"; ctx.fillText("Нажмите для повтора", 400, 630);
+        }
+    }
+
+    loop(time) {
+        const dt = Math.min((time - this.lastTime) * 0.001, 0.1);
+        this.lastTime = time; this.update(dt); this.render();
+        requestAnimationFrame((t) => this.loop(t));
+    }
+}
+window.onload = () => { new Game(); };
+</script>
+</body>
+</html>
