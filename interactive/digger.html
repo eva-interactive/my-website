@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Digger 15x12: Rapid Fire Engine</title>
+    <style>
+        body, html { margin:0; padding:0; overflow:hidden; background:#000; width:100%; height:100%; font-family:monospace; user-select:none; }
+        canvas { position:absolute; top:0; left:0; width:100%; height:100%; z-index:5; }
+        .move-pad { position:absolute; bottom:20px; left:20px; width:200px; height:200px; z-index:20; display:grid; grid-template-columns:repeat(5, 1fr); grid-template-rows:repeat(5, 1fr); gap:4px; }
+        .fire-container { position:absolute; bottom:20px; right:20px; width:200px; display:flex; flex-direction:column; align-items:center; gap:8px; z-index:20; }
+        .fire-hint { color:#ff4500; font-size:11px; font-weight:bold; text-shadow:0 0 5px rgba(255,69,0,0.5); text-align:center; animation: blink 1.5s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+        .fire-pad { width:200px; height:200px; display:grid; grid-template-columns:repeat(3, 1fr); grid-template-rows:repeat(3, 1fr); gap:5px; }
+        .btn { background:rgba(255,255,255,0.12); border:1px solid #00ffff; color:#fff; font-size:14px; font-weight:bold; border-radius:8px; display:flex; align-items:center; justify-content:center; }
+        .btn:active { background:rgba(0,255,255,0.35); }
+        .btn-auto { border-color:#00ffaa; color:#00ffaa; background:rgba(0,255,170,0.05); }
+        .btn-auto:active { background:rgba(0,255,170,0.3); }
+        .b-auto-u { grid-column:3; grid-row:1; }
+        .b-auto-l { grid-column:1; grid-row:3; }
+        .b-auto-r { grid-column:5; grid-row:3; }
+        .b-auto-d { grid-column:3; grid-row:5; }
+        .b-step-u { grid-column:3; grid-row:2; }
+        .b-step-l { grid-column:2; grid-row:3; }
+        .b-step-r { grid-column:4; grid-row:3; }
+        .b-step-d { grid-column:3; grid-row:4; }
+        .btn-fire { border-color:#ff4500; color:#ff4500; background:rgba(255,69,0,0.08); font-size:13px; touch-action:none; }
+        .btn-fire:active { background:rgba(255,69,0,0.45); }
+        .b-f-u { grid-column:2; grid-row:1; }
+        .b-f-l { grid-column:1; grid-row:2; }
+        .b-f-r { grid-column:3; grid-row:2; }
+        .b-f-d { grid-column:2; grid-row:3; }
+    </style>
+</head>
+<body>
+    <canvas id="gCanvas"></canvas>
+    <div class="move-pad">
+        <div class="btn btn-auto b-auto-u" onclick="setMovement(0,-1,true)">⏫</div>
+        <div class="btn btn-auto b-auto-l" onclick="setMovement(-1,0,true)">⏪</div>
+        <div class="btn btn-auto b-auto-r" onclick="setMovement(1,0,true)">⏩</div>
+        <div class="btn btn-auto b-auto-d" onclick="setMovement(0,1,true)">⏬</div>
+        <div class="btn b-step-u" onclick="setMovement(0,-1,false)">▲</div>
+        <div class="btn b-step-l" onclick="setMovement(-1,0,false)">◀</div>
+        <div class="btn b-step-r" onclick="setMovement(1,0,false)">▶</div>
+        <div class="btn b-step-d" onclick="setMovement(0,1,false)">▼</div>
+    </div>
+    <div class="fire-container">
+        <div class="fire-hint">🔥 [ЭТО СТРЕЛЯЛКА / ШУТЕР]</div>
+        <div class="fire-pad">
+            <div class="btn btn-fire b-f-u" id="fUp">🔥↑</div>
+            <div class="btn btn-fire b-f-l" id="fLeft">🔥←</div>
+            <div class="btn btn-fire b-f-r" id="fRight">🔥→</div>
+            <div class="btn btn-fire b-f-d" id="fDown">🔥↓</div>
+        </div>
+    </div>
+<script>
+const canvas = document.getElementById('gCanvas');
+const ctx = canvas.getContext('2d');
+const W = 15, H = 12;
+const T_EMPTY = 0, T_EARTH = 1, T_EMERALD = 2, T_BAG = 3, T_GOLD = 4;
+let grid = [], px = 7, py = 6, playerDir = 1, dx = 0, dy = 0, isAutoMove = false;
+let score = 0, lives = 5, bags = [], enemies = [], lasers = [], particles = [];
+
+let fireU = 0, fireD = 0, fireL = 0, fireR = 0;
+let fireRateCounter = 0;
+
+let audioCtx = null;
+function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+function playSound(type) {
+    if (!audioCtx) return;
+    try {
+        let osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination); let now = audioCtx.currentTime;
+        if (type === 'dig') { osc.type = 'triangle'; osc.frequency.setValueAtTime(90, now); gain.gain.setValueAtTime(0.12, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.04); osc.start(now); osc.stop(now + 0.04); }
+        if (type === 'gem') { osc.type = 'sine'; osc.frequency.setValueAtTime(880, now); osc.frequency.exponentialRampToValueAtTime(1320, now + 0.08); gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.09); osc.start(now); osc.stop(now + 0.09); }
+        if (type === 'laser') { osc.type = 'sawtooth'; osc.frequency.setValueAtTime(600, now); osc.frequency.exponentialRampToValueAtTime(1600, now + 0.06); gain.gain.setValueAtTime(0.08, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08); osc.start(now); osc.stop(now + 0.08); }
+        if (type === 'kill') { osc.type = 'square'; osc.frequency.setValueAtTime(160, now); osc.frequency.linearRampToValueAtTime(30, now + 0.22); gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25); osc.start(now); osc.stop(now + 0.25); }
+    } catch(e) {}
+}
+function initGame() {
+    grid = []; bags = []; enemies = []; dx = 0; dy = 0; lasers = []; particles = []; fireU=0; fireD=0; fireL=0; fireR=0; isAutoMove = false;
+    for (let i = 0; i < W * H; i++) { let r = Math.random(); if (r < 0.11) grid.push(T_EMERALD); else if (r < 0.15) grid.push(T_BAG); else grid.push(T_EARTH); }
+    for (let x = 1; x < 14; x++) grid[6 * W + x] = T_EMPTY;
+    for (let y = 2; y < 10; y++) grid[y * W + 7] = T_EMPTY;
+    px = 7; py = 6; grid[py * W + px] = T_EMPTY; grid[1 * W + 13] = T_EMPTY; enemies.push({ x: 13, y: 1, type: 'nobbin' });
+}
+function saveHighScore() {
+    let currentHigh = localStorage.getItem('digger_highscore') || 0;
+    if (score > currentHigh) { localStorage.setItem('digger_highscore', score); }
+}
+let getHigh = () => localStorage.getItem('digger_highscore') || 0;
+function createExplosion(x, y, color) {
+    for (let i = 0; i < 12; i++) {
+        let angle = Math.random() * Math.PI * 2;
+        let speed = 2 + Math.random() * 5;
+        particles.push({
+            x: x, y: y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 1.0,
+            decay: 0.07 + Math.random() * 0.05,
+            color: color
+        });
+    }
+}
+function setMovement(x, y, autoMode) { initAudio(); dx = x; dy = y; isAutoMove = autoMode; if(x !== 0) playerDir = x; }
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize); resize();
+function syncBagsFromGrid() { bags = []; for (let y = 0; y < H; y++) { for (let x = 0; x < W; x++) { if (grid[y * W + x] === T_BAG) bags.push({ x: x, y: y, state: 0, delay: 0, fallCount: 0 }); } } }
+function updateEnemies() {
+    for (let e of enemies) {
+        let diffX = px - e.x, diffY = py - e.y;
+        let nextDx = 0, nextDy = 0;
+
+        if (Math.abs(diffX) > Math.abs(diffY)) { nextDx = diffX > 0 ? 1 : -1; }
+        else { nextDy = diffY > 0 ? 1 : -1; }
+        let nx = e.x + nextDx, ny = e.y + nextDy;
+
+        if (nx >= 0 && nx < W && ny >= 0 && ny < H) {
+            let nextTile = grid[ny * W + nx];
+            if (e.type === 'hobbins') {
+                if (nextTile === T_EARTH || nextTile === T_EMERALD) {
+                    grid[ny * W + nx] = T_EMPTY;
+                    playSound('dig');
+                }
+                if (nextTile !== T_BAG) { e.x = nx; e.y = ny; }
+            } else {
+                if (nextTile === T_EMPTY) { e.x = nx; e.y = ny; }
+                else {
+                    if (nextDx !== 0) { nextDx = 0; nextDy = diffY > 0 ? 1 : -1; }
+                    else { nextDy = 0; nextDx = diffX > 0 ? 1 : -1; }
+                    nx = e.x + nextDx; ny = e.y + nextDy;
+                    if (nx >= 0 && nx < W && ny >= 0 && ny < H && grid[ny * W + nx] === T_EMPTY) { e.x = nx; e.y = ny; }
+                }
+            }
+        }
+
+        if (e.x === px && e.y === py) {
+            let size = Math.min(canvas.width / (W + 1), (canvas.height - 240) / H);
+            let ox = (canvas.width - size * W) / 2, oy = (canvas.height - 240 - size * H) / 2 + 35;
+            createExplosion(ox + px * size + size/2, oy + py * size + size/2, '#00ffff');
+            saveHighScore();
+            lives--; dx = 0; dy = 0; isAutoMove = false;
+            if (lives <= 0) { alert("ИГРА ОКОНЧЕНА!"); score = 0; lives = 5; initGame(); syncBagsFromGrid(); }
+            else { px = 7; py = 6; grid[py * W + px] = T_EMPTY; }
+            break;
+        }
+    }
+}
+function updateBags() {
+    let size = Math.min(canvas.width / (W + 1), (canvas.height - 240) / H);
+    let ox = (canvas.width - size * W) / 2, oy = (canvas.height - 240 - size * H) / 2 + 35;
+    for (let i = bags.length - 1; i >= 0; i--) {
+        let b = bags[i], underY = b.y + 1;
+        if (underY >= H) {
+            if (b.state === 2 && b.fallCount > 1) { grid[b.y * W + b.x] = T_GOLD; score += 50; bags.splice(i, 1); }
+            else { b.state = 0; }
+            continue;
+        }
+        let enemyUnder = enemies.find(e => e.x === b.x && e.y === underY);
+        let tileUnder = grid[underY * W + b.x];
+        if (b.state === 0) { if (tileUnder === T_EMPTY || (b.x === px && underY === py) || enemyUnder) { b.state = 1; b.delay = 2; } }
+        else if (b.state === 1) { b.delay--; if (b.delay <= 0) { b.state = 2; b.fallCount = 0; } if (tileUnder !== T_EMPTY && !(b.x === px && underY === py) && !enemyUnder) { b.state = 0; } }
+        else if (b.state === 2) {
+            grid[b.y * W + b.x] = T_EMPTY;
+            if (enemyUnder && b.fallCount >= 0) {
+                createExplosion(ox + b.x * size + size/2, oy + underY * size + size/2, '#ffd700');
+                let eIdx = enemies.indexOf(enemyUnder); if (eIdx !== -1) enemies.splice(eIdx, 1);
+                score += 300; playSound('kill'); grid[underY * W + b.x] = T_GOLD; bags.splice(i, 1);
+                continue;
+            }
+            if (tileUnder === T_EMPTY || (b.x === px && underY === py)) {
+                b.y = underY; b.fallCount++; grid[b.y * W + b.x] = T_BAG;
+                if (b.x === px && b.y === py) {
+                    createExplosion(ox + px * size + size/2, oy + py * size + size/2, '#00ffff');
+                    saveHighScore();
+                    lives--; dx = 0; dy = 0; isAutoMove = false;
+                    if (lives <= 0) { alert("ИГРА ОКОНЧЕНА!"); score = 0; lives = 5; initGame(); syncBagsFromGrid(); }
+                    else { px = 7; py = 6; grid[py * W + px] = T_EMPTY; }
+                    break;
+                }
+            } else {
+                if (b.fallCount > 1) { grid[b.y * W + b.x] = T_GOLD; score += 50; bags.splice(i, 1); }
+                else { grid[b.y * W + b.x] = T_BAG; b.state = 0; }
+            }
+        }
+    }
+}
+function updateLasers() {
+    let size = Math.min(canvas.width / (W + 1), (canvas.height - 240) / H);
+    let ox = (canvas.width - size * W) / 2, oy = (canvas.height - 240 - size * H) / 2 + 35;
+    for (let i = lasers.length - 1; i >= 0; i--) {
+        let l = lasers[i]; l.x += l.ldx; l.y += l.ldy;
+        let hit = false;
+        for (let j = enemies.length - 1; j >= 0; j--) {
+            if (enemies[j].x === l.x && enemies[j].y === l.y) {
+                let pColor = enemies[j].type === 'hobbins' ? '#b500ff' : '#ff0055';
+                createExplosion(ox + l.x * size + size/2, oy + l.y * size + size/2, pColor);
+                enemies.splice(j, 1); score += 250; playSound('kill'); hit = true; break;
+            }
+        }
+        if (l.x < 0 || l.x >= W || l.y < 0 || l.y >= H) { lasers.splice(i, 1); continue; }
+        if (grid[l.y * W + l.x] === T_EARTH) {
+            if (l.super) { grid[l.y * W + l.x] = T_EMPTY; playSound('dig'); } 
+            else { hit = true; }
+        }
+        if (hit) { lasers.splice(i, 1); }
+    }
+}
+
+let enemyTick = 0, spawnTimer = 0;
+setInterval(() => {
+    if (dx !== 0 || dy !== 0) {
+        let nx = px + dx, ny = py + dy;
+        if (nx >= 0 && nx < W && ny >= 0 && ny < H) {
+            let nextTile = grid[ny * W + nx];
+            if (nextTile === T_BAG) {
+                if (dx !== 0) {
+                    let pushX = nx + dx;
+                    if (pushX >= 0 && pushX < W && grid[ny * W + pushX] === T_EMPTY) {
+                        grid[ny * W + nx] = T_EMPTY; grid[ny * W + pushX] = T_BAG;
+                        let b = bags.find(bag => bag.x === nx && bag.y === ny); if (b) b.x = pushX;
+                        px = nx; py = ny;
+                    } else { dx = 0; dy = 0; isAutoMove = false; }
+                } else { dx = 0; dy = 0; isAutoMove = false; }
+            } else {
+                px = nx; py = ny;
+                if (nextTile === T_EMERALD) { score += 25; playSound('gem'); }
+                else if (nextTile === T_GOLD) { score += 100; playSound('gem'); }
+                else if (nextTile === T_EARTH) { playSound('dig'); }
+                grid[py * W + px] = T_EMPTY;
+            }
+        } else { dx = 0; dy = 0; isAutoMove = false; }
+        if (!isAutoMove) { dx = 0; dy = 0; }
+    }
+
+    updateBags(); updateLasers();
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i]; p.x += p.vx; p.y += p.vy; p.life -= p.decay;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+
+    if (fireU || fireD || fireL || fireR) {
+        fireRateCounter++;
+        if (fireRateCounter % 2 === 0) {
+            let fdx = fireL ? -1 : (fireR ? 1 : 0);
+            let fdy = fireU ? -1 : (fireD ? 1 : 0);
+            let isSuper = Math.random() < 0.20;
+            lasers.push({ x: px, y: py, ldx: fdx, ldy: fdy, super: isSuper }); playSound('laser');
+        }
+    } else { fireRateCounter = 0; }
+
+    spawnTimer++;
+    if (spawnTimer > 142) {
+        if (spawnTimer >= 284) {
+            grid[1 * W + 13] = T_EMPTY;
+            let type = Math.random() < 0.5 ? 'hobbins' : 'nobbin';
+            enemies.push({ x: 13, y: 1, type: type }); spawnTimer = 143;
+        }
+        enemyTick++; if (enemyTick % 2 === 0) { updateEnemies(); }
+    }
+
+    ctx.fillStyle = '#06020f'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    let size = Math.min(canvas.width / (W + 1), (canvas.height - 240) / H);
+    let ox = (canvas.width - size * W) / 2, oy = (canvas.height - 240 - size * H) / 2 + 35;
+
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            let sx = ox + x * size, sy = oy + y * size, tile = grid[y * W + x];
+            ctx.fillStyle = '#140c26'; ctx.fillRect(sx + 1, sy + 1, size - 2, size - 2);
+            if (tile === T_EARTH) { ctx.fillStyle = '#8b4513'; ctx.fillRect(sx + 1, sy + 1, size - 2, size - 2); }
+            else if (tile === T_EMERALD) { ctx.fillStyle = '#00ff44'; ctx.beginPath(); ctx.arc(sx + size/2, sy + size/2, size * 0.28, 0, Math.PI*2); ctx.fill(); }
+            else if (tile === T_BAG) {
+                let b = bags.find(bag => bag.x === x && bag.y === y);
+                let shake = (b && b.state === 1 && b.delay % 2 === 0) ? size * 0.08 : 0;
+                ctx.fillStyle = '#ffaa00'; ctx.fillRect(sx + size*0.2 + shake, sy + size*0.25, size*0.6, size*0.55);
+                ctx.fillStyle = '#d48800'; ctx.fillRect(sx + size*0.35 + shake, sy + size*0.15, size*0.3, size*0.1);
+            }
+            else if (tile === T_GOLD) { ctx.fillStyle = '#ffd700'; ctx.fillRect(sx + size*0.15, sy + size*0.5, size*0.7, size*0.3); ctx.fillRect(sx + size*0.3, sy + size*0.35, size*0.4, size*0.15); }
+        }
+    }
+
+    for (let l of lasers) { 
+        ctx.fillStyle = l.super ? '#b500ff' : '#ffea00';
+        ctx.fillRect(ox + l.x * size + size*0.3, oy + l.y * size + size*0.3, size*0.4, size*0.4); 
+    }
+
+    for (let e of enemies) {
+        if (spawnTimer > 142) {
+            let eX = ox + e.x * size, eY = oy + e.y * size;
+            ctx.fillStyle = e.type === 'hobbins' ? '#b500ff' : '#ff0055'; ctx.fillRect(eX + 4, eY + 4, size - 8, size - 8);
+            ctx.fillStyle = '#fff'; ctx.fillRect(eX + size * 0.2, eY + size * 0.3, size * 0.2, size * 0.2); ctx.fillRect(eX + size * 0.6, eY + size * 0.3, size * 0.2, size * 0.2);
+        }
+    }
+
+    let pScrX = ox + px * size, pScrY = oy + py * size;
+    ctx.fillStyle = '#00ffff'; ctx.fillRect(pScrX + 4, pScrY + 4, size - 8, size - 8);
+    ctx.fillStyle = '#ff0000';
+    let eyeX = pScrX + size / 2 - 3, eyeY = pScrY + size / 2 - 3;
+    eyeX += playerDir * (size * 0.25); ctx.fillRect(eyeX, eyeY, 6, 6);
+
+    for (let p of particles) {
+        ctx.fillStyle = p.color; ctx.globalAlpha = p.life;
+        ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+    }
+    ctx.globalAlpha = 1.0;
+
+    ctx.fillStyle = '#00ffff'; ctx.font = 'bold 24px monospace'; 
+    ctx.fillText(`SCORE: ${String(score).padStart(6, '0')}`, ox, oy - 15);
+    ctx.fillStyle = '#ff00ff'; ctx.fillText(`LIVES: ${"❤️".repeat(lives)}`, ox + size * W - 280, oy - 15);
+}, 140);
+
+function setupFire(id, type) {
+    const el = document.getElementById(id);
+    el.addEventListener('touchstart', (e) => {
+        e.preventDefault(); initAudio();
+        if(type==='U') fireU=1; if(type==='D') fireD=1; if(type==='L') fireL=1; if(type==='R') fireR=1;
+    }, {passive:false});
+    el.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        if(type==='U') fireU=0; if(type==='D') fireD=0; if(type==='L') fireL=0; if(type==='R') fireR=0;
+    }, {passive:false});
+    el.addEventListener('touchcancel', (e) => {
+        e.preventDefault();
+        if(type==='U') fireU=0; if(type==='D') fireD=0; if(type==='L') fireL=0; if(type==='R') fireR=0;
+    }, {passive:false});
+}
+
+setupFire('fUp', 'U'); setupFire('fDown', 'D'); setupFire('fLeft', 'L'); setupFire('fRight', 'R');
+
+initGame();
+syncBagsFromGrid();
+</script>
+</body>
+</html>
